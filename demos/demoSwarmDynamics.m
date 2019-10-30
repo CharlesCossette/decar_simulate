@@ -1,4 +1,4 @@
-classdef SwarmDynamics < handle 
+classdef demoSwarmDynamics < handle 
     % Only single-integrator dynamics right now.
     properties
         numAgents
@@ -15,7 +15,7 @@ classdef SwarmDynamics < handle
         %%%%%%%%%%%%% Constructor, Initial Condtions, Update %%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Mandatory functions!
-        function self = SwarmDynamics(numAgents)
+        function self = demoSwarmDynamics(numAgents)
             % Constructor
             self.numAgents = numAgents;
         end

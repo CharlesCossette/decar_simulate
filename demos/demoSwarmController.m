@@ -1,4 +1,4 @@
-classdef SwarmController1 < handle %
+classdef demoSwarmController < handle %
     % Simple controller. MINIMUM WORKING EXAMPLE of a node.
     properties
         numAgents
@@ -11,7 +11,7 @@ classdef SwarmController1 < handle %
         %%%%%%%%%%%%% Constructor, Initial Condtions, Update %%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Mandatory functions!
-        function self = SwarmController1(numAgents)
+        function self = demoSwarmController(numAgents)
             % Constructor
             self.numAgents = numAgents;
         end
