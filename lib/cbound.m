@@ -1,4 +1,7 @@
 function output = cbound(x,x_min,x_max)
+    % Continously differentiable saturation function!
+    % For use in Runge-Kutta methods and similar.
+    
     if x_min >= x_max
         error('max must be greater than min!')
     end

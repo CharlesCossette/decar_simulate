@@ -1,6 +1,8 @@
 classdef Simulation < handle
-    % Generic Simulation class for any architecture of nodes.
+    % Generic continuous simulation class for any architecture of nodes.
     % TODO - event functions.
+    % TODO - add more solvers
+    
     properties
         masterFunction
         nodes
@@ -32,6 +34,16 @@ classdef Simulation < handle
                                      self.timeSpan,...
                                      self.getInitialConditions(),...
                                      self.odeOptions);
+            elseif strcmp(self.odeSolver,'ode113')
+                [t,x] = ode113(@(t,x) self.masterFunction(t,x,self),...
+                                      self.timeSpan,...
+                                      self.getInitialConditions(),...
+                                      self.odeOptions);   
+            elseif strcmp(self.odeSolver,'ode4')
+                [t,x] = ode4(@(t,x) self.masterFunction(t,x,self),...
+                                      self.timeSpan,...
+                                      self.getInitialConditions(),...
+                                      self.odeOptions);  
             else
                 error('ODE solver not supported.')
             end
@@ -54,7 +66,7 @@ classdef Simulation < handle
             % Have inside the node?
         end
         
-        function data = getSimData(self,t,x,masterFunc)
+        function data = getSimData(~,t,x,masterFunc)
             % Get sim data from second output argument of master.
             
             % Initialize
