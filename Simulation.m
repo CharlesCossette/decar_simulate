@@ -28,6 +28,7 @@ classdef Simulation < handle
         function data = run(self)
             % Run simulation by numerically integrating ODE
             % TODO - add more ODE solvers
+            % TODO - add waitbar!
             
             if strcmp(self.odeSolver,'ode45')
                 [t,x] = ode45(@(t,x) self.masterFunction(t,x,self),...
@@ -52,6 +53,7 @@ classdef Simulation < handle
             
             
         end
+
         
         function x0 = getInitialConditions(self)
             % Retrieve initial conditions of all nodes.
@@ -100,6 +102,8 @@ classdef Simulation < handle
         end
         
         function updateNodeStates(self,x)
+            % Loops through all the nodes and runs the updateState()
+            % function.
             nodeNames = fieldnames(self.nodes);
             
             for lv1 = 1:length(nodeNames)
