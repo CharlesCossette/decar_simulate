@@ -1,4 +1,4 @@
-classdef Simulation < handle
+classdef ContinuousSimulation < handle
     % Generic continuous simulation class for any architecture of nodes.
     % TODO - event functions.
     % TODO - add more solvers
@@ -6,14 +6,15 @@ classdef Simulation < handle
     properties
         masterFunction
         nodes
+        numNodeStates
         timeSpan
         odeSolver
         odeOptions
     end
     
     methods
-        function self = Simulation()
-            % Constructor
+        function self = ContinuousSimulation()
+            % Constructor - default settings
             self.odeSolver = 'ode45';
             self.odeOptions = odeset();
             self.timeSpan = linspace(0,10,100);
@@ -61,7 +62,15 @@ classdef Simulation < handle
             nodeNames = fieldnames(self.nodes);
             numNodes = numel(nodeNames);
             for lv1 = 1:numNodes
-                x0 = [x0;self.nodes.(nodeNames{lv1}).initialCondition()];
+                x0_node = self.nodes.(nodeNames{lv1}).initialCondition();
+                if size(x0_node,2) > 1
+                    error(['Error in initial conditions of ',...
+                            nodeNames{lv1},...
+                           '. Must be column matrix']);
+                end
+                self.numNodeStates.(nodeNames{lv1}) = length(x0_node);
+                x0 = [x0;x0_node];
+                
             end
             
             % NEED TO RECORD NUMBER OF STATES PER NODE.
@@ -107,7 +116,7 @@ classdef Simulation < handle
             nodeNames = fieldnames(self.nodes);
             
             for lv1 = 1:length(nodeNames)
-                numStates = self.nodes.(nodeNames{lv1}).numStates;
+                numStates = self.numNodeStates.(nodeNames{lv1});
                 self.nodes.(nodeNames{lv1}).updateState(x(1:numStates));
                 x = x(numStates + 1:end);
             end

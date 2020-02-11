@@ -1,5 +1,5 @@
 
-sim = Simulation();
+sim = ContinuousSimulation();
 
 % Load Dynamics node
 sim.addNode(demoSwarmDynamics(4),'dynamics');
@@ -16,3 +16,6 @@ data = sim.run();
 
 % Plot
 plot(data.t, data.state)
+grid on
+xlabel('Time (s)')
+ylabel('Positions')

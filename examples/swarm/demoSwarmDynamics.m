@@ -2,7 +2,6 @@ classdef demoSwarmDynamics < handle
     % Only single-integrator dynamics right now.
     properties
         numAgents
-        numStates
         state
         position
         velocity
@@ -26,8 +25,7 @@ classdef demoSwarmDynamics < handle
             v0 = zeros(size(r0));
             self.initialPosition = r0(:);
             self.initialVelocity = v0(:);
-            x0 = self.initialPosition;
-            self.numStates = length(x0);       
+            x0 = self.initialPosition;   
         end
         
         
