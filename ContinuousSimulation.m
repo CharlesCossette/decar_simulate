@@ -10,6 +10,7 @@ classdef ContinuousSimulation < handle
         timeSpan
         odeSolver
         odeOptions
+        waitbarHandle
     end
     
     methods
@@ -20,17 +21,17 @@ classdef ContinuousSimulation < handle
             self.timeSpan = linspace(0,10,100);
         end
         
-        function addNode(self, node, label)
+        function addNode(self, node, nodeName)
             % Add node to list of nodes
             % TODO - automatically index nodes if label is repeated
-            self.nodes.(label) = node;
+            self.nodes.(nodeName) = node;
         end
         
         function data = run(self)
             % Run simulation by numerically integrating ODE
             % TODO - add more ODE solvers
             % TODO - add waitbar!
-            
+            self.waitbarHandle = waitbar(0,'Simulation In Progress');
             if strcmp(self.odeSolver,'ode45')
                 [t,x] = ode45(@(t,x) self.masterFunction(t,x,self),...
                                      self.timeSpan,...
@@ -50,9 +51,10 @@ classdef ContinuousSimulation < handle
                 error('ODE solver not supported.')
             end
             
-            data = self.getSimData(t, x, @(t,x) self.masterFunction(t,x,self));
             
+            data = self.getSimData(t, x, @(t,x) self.masterWrapper(t,x));
             
+            close(self.waitbarHandle);
         end
 
         
@@ -77,7 +79,35 @@ classdef ContinuousSimulation < handle
             % Have inside the node?
         end
         
-        function data = getSimData(~,t,x,masterFunc)
+        function updateNodeStates(self,x)
+            % Loops through all the nodes and runs the updateState()
+            % function.
+            nodeNames = fieldnames(self.nodes);
+            
+            for lv1 = 1:length(nodeNames)
+                numStates = self.numNodeStates.(nodeNames{lv1});
+                self.nodes.(nodeNames{lv1}).updateState(x(1:numStates));
+                x = x(numStates + 1:end);
+            end
+        end
+        
+    end
+    methods (Access = private)
+        
+        function [x_dot, data] = masterWrapper(self,t,x)
+            % Update Node states
+            self.updateNodeStates(x);
+            % Call master
+            [x_dot, data] = self.masterFunction(t,x,self);  
+            % Update waitbar
+            waitbar(t/self.timeSpan(end),self.waitbarHandle);
+        end
+        
+        
+        
+
+        
+        function data = getSimData(self,t,x,masterFunc)
             % Get sim data from second output argument of master.
             
             % Initialize
@@ -101,6 +131,7 @@ classdef ContinuousSimulation < handle
                         data.(dataNames{lv2}) = [sol_data.(dataNames{lv2})];
                     end
                 end
+                waitbar(lv1/size(x,1),self.waitbarHandle,'Extracting Data');
             end
             
             % Squeeze to eliminate redundant dimensions.
@@ -108,19 +139,9 @@ classdef ContinuousSimulation < handle
             for lv1 = 1:numel(dataNames)
                 data.(dataNames{lv1}) = squeeze(data.(dataNames{lv1}));
             end
-        end
-        
-        function updateNodeStates(self,x)
-            % Loops through all the nodes and runs the updateState()
-            % function.
-            nodeNames = fieldnames(self.nodes);
             
-            for lv1 = 1:length(nodeNames)
-                numStates = self.numNodeStates.(nodeNames{lv1});
-                self.nodes.(nodeNames{lv1}).updateState(x(1:numStates));
-                x = x(numStates + 1:end);
-            end
-        end   
+            
+        end
                 
     end
 end
