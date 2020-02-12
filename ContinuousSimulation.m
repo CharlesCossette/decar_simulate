@@ -1,7 +1,9 @@
 classdef ContinuousSimulation < handle
     % Generic continuous simulation class for any architecture of nodes.
     % TODO - event functions.
-    % TODO - add more solvers
+    % TODO - add more solvers.
+    % TODO - add node superclass (might not be necessary, obvious what to 
+    % if you receive no initial condition).
     
     properties
         masterFunction
@@ -10,6 +12,8 @@ classdef ContinuousSimulation < handle
         timeSpan
         odeSolver
         odeOptions
+    end
+    properties (Access = private)
         waitbarHandle
     end
     
@@ -30,27 +34,26 @@ classdef ContinuousSimulation < handle
         function data = run(self)
             % Run simulation by numerically integrating ODE
             % TODO - add more ODE solvers
-            % TODO - add waitbar!
+
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
             if strcmp(self.odeSolver,'ode45')
-                [t,x] = ode45(@(t,x) self.masterFunction(t,x,self),...
+                [t,x] = ode45(@(t,x) self.masterWrapper(t,x),...
                                      self.timeSpan,...
                                      self.getInitialConditions(),...
                                      self.odeOptions);
             elseif strcmp(self.odeSolver,'ode113')
-                [t,x] = ode113(@(t,x) self.masterFunction(t,x,self),...
+                [t,x] = ode113(@(t,x) self.masterWrapper(t,x),...
                                       self.timeSpan,...
                                       self.getInitialConditions(),...
                                       self.odeOptions);   
             elseif strcmp(self.odeSolver,'ode4')
-                [t,x] = ode4(@(t,x) self.masterFunction(t,x,self),...
+                [t,x] = ode4(@(t,x) self.masterWrapper(t,x),...
                                       self.timeSpan,...
                                       self.getInitialConditions(),...
                                       self.odeOptions);  
             else
                 error('ODE solver not supported.')
             end
-            
             
             data = self.getSimData(t, x, @(t,x) self.masterWrapper(t,x));
             
@@ -64,19 +67,21 @@ classdef ContinuousSimulation < handle
             nodeNames = fieldnames(self.nodes);
             numNodes = numel(nodeNames);
             for lv1 = 1:numNodes
-                x0_node = self.nodes.(nodeNames{lv1}).initialCondition();
-                if size(x0_node,2) > 1
-                    error(['Error in initial conditions of ',...
-                            nodeNames{lv1},...
-                           '. Must be column matrix']);
-                end
-                self.numNodeStates.(nodeNames{lv1}) = length(x0_node);
-                x0 = [x0;x0_node];
+                if ismethod(self.nodes.(nodeNames{lv1}),'initialCondition')
+                    x0_node = self.nodes.(nodeNames{lv1}).initialCondition();
                 
+                    % Error checking for initial condition.
+                    if size(x0_node,2) > 1
+                        error(['Error in initial conditions of ',...
+                                nodeNames{lv1},...
+                               '. Must be column matrix']);
+                    end
+
+                    self.numNodeStates.(nodeNames{lv1}) = length(x0_node);
+                    x0 = [x0;x0_node];
+                end
             end
             
-            % NEED TO RECORD NUMBER OF STATES PER NODE.
-            % Have inside the node?
         end
         
         function updateNodeStates(self,x)
@@ -85,9 +90,11 @@ classdef ContinuousSimulation < handle
             nodeNames = fieldnames(self.nodes);
             
             for lv1 = 1:length(nodeNames)
-                numStates = self.numNodeStates.(nodeNames{lv1});
-                self.nodes.(nodeNames{lv1}).updateState(x(1:numStates));
-                x = x(numStates + 1:end);
+                if ismethod(self.nodes.(nodeNames{lv1}),'updateState')
+                    numStates = self.numNodeStates.(nodeNames{lv1});
+                    self.nodes.(nodeNames{lv1}).updateState(x(1:numStates));
+                    x = x(numStates + 1:end);
+                end
             end
         end
         
@@ -98,14 +105,10 @@ classdef ContinuousSimulation < handle
             % Update Node states
             self.updateNodeStates(x);
             % Call master
-            [x_dot, data] = self.masterFunction(t,x,self);  
+            [x_dot, data] = self.masterFunction(t,x,self.nodes);  
             % Update waitbar
             waitbar(t/self.timeSpan(end),self.waitbarHandle);
         end
-        
-        
-        
-
         
         function data = getSimData(self,t,x,masterFunc)
             % Get sim data from second output argument of master.
@@ -115,13 +118,12 @@ classdef ContinuousSimulation < handle
             % Store time data.
             data.t = t;
             % Store raw state, just in case.
-            data.state = x;
+            data.state = x.';
             
-            % TODO - do something with x_dot? currently useless. Stored but
-            % doing nothing.
             x_dot = zeros(size(x))';
             for lv1 = 1:size(x,1)
                 [x_dot(:,lv1), sol_data] = masterFunc(t(lv1), x(lv1,:)');
+                
                 dataNames = fieldnames(sol_data);
                 for lv2 = 1:numel(dataNames)
                     if isfield(data, dataNames{lv2})
@@ -133,6 +135,7 @@ classdef ContinuousSimulation < handle
                 end
                 waitbar(lv1/size(x,1),self.waitbarHandle,'Extracting Data');
             end
+            data.stateRate = x_dot;
             
             % Squeeze to eliminate redundant dimensions.
             dataNames = fieldnames(data);
