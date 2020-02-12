@@ -1,14 +1,15 @@
 classdef ContinuousSimulation < handle
     % Generic continuous simulation class for any architecture of nodes.
     % TODO - event functions.
-    % TODO - add more solvers.
-    % TODO - add node superclass (might not be necessary, obvious what to 
-    % if you receive no initial condition).
+    % TODO - eliminate the need to carefully construct x_dot with the
+    % correct ordering.
+    % TODO - add node superclass (might not be necessary, obvious what to
+    % do if you receive no initial condition).
     
     properties
         masterFunction
         nodes
-        numNodeStates
+        nodeNumStates
         timeSpan
         odeSolver
         odeOptions
@@ -33,8 +34,8 @@ classdef ContinuousSimulation < handle
         
         function data = run(self)
             % Run simulation by numerically integrating ODE
-            % TODO - add more ODE solvers
-
+            % TODO - add ode15s as a solver
+            
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
             if strcmp(self.odeSolver,'ode45')
                 [t,x] = ode45(@(t,x) self.masterWrapper(t,x),...
@@ -63,6 +64,11 @@ classdef ContinuousSimulation < handle
         
         function x0 = getInitialConditions(self)
             % Retrieve initial conditions of all nodes.
+            % Loops through all the nodes and runs the initialCondition()
+            % method if it exists. This method also records the number of
+            % states present in each node, by reading the size of the
+            % return value from the initialCondition() method.
+            
             x0 = [];
             nodeNames = fieldnames(self.nodes);
             numNodes = numel(nodeNames);
@@ -77,7 +83,7 @@ classdef ContinuousSimulation < handle
                                '. Must be column matrix']);
                     end
 
-                    self.numNodeStates.(nodeNames{lv1}) = length(x0_node);
+                    self.nodeNumStates.(nodeNames{lv1}) = length(x0_node);
                     x0 = [x0;x0_node];
                 end
             end
@@ -85,13 +91,13 @@ classdef ContinuousSimulation < handle
         end
         
         function updateNodeStates(self,x)
-            % Loops through all the nodes and runs the updateState()
-            % function.
+            % Loops through all the nodes and runs the updateState(x)
+            % method if it exists.
             nodeNames = fieldnames(self.nodes);
             
             for lv1 = 1:length(nodeNames)
                 if ismethod(self.nodes.(nodeNames{lv1}),'updateState')
-                    numStates = self.numNodeStates.(nodeNames{lv1});
+                    numStates = self.nodeNumStates.(nodeNames{lv1});
                     self.nodes.(nodeNames{lv1}).updateState(x(1:numStates));
                     x = x(numStates + 1:end);
                 end
@@ -111,7 +117,8 @@ classdef ContinuousSimulation < handle
         end
         
         function data = getSimData(self,t,x,masterFunc)
-            % Get sim data from second output argument of master.
+            % Get sim data from second output of master.
+            % TODO - inefficient appending, find solution.
             
             % Initialize
             data = [];
@@ -122,13 +129,21 @@ classdef ContinuousSimulation < handle
             
             x_dot = zeros(size(x))';
             for lv1 = 1:size(x,1)
+                % Feed solution back into master to get the data struct
+                % from the second output.
                 [x_dot(:,lv1), sol_data] = masterFunc(t(lv1), x(lv1,:)');
                 
+                % Get all the field names from the sol_data struct.
                 dataNames = fieldnames(sol_data);
+                % Each field should contain only 1 value, so loop and keep
+                % combining into a final data struct.
                 for lv2 = 1:numel(dataNames)
                     if isfield(data, dataNames{lv2})
+                        % If a field contains a matrix, append in the
+                        % 3rd dimension. Generalized to N dimensions.
                         N = ndims(sol_data.(dataNames{lv2}));
-                        data.(dataNames{lv2}) = cat(N+1, data.(dataNames{lv2}), sol_data.(dataNames{lv2}));
+                        data.(dataNames{lv2}) = cat(N+1, data.(dataNames{lv2}),...
+                                                         sol_data.(dataNames{lv2}));
                     else
                         data.(dataNames{lv2}) = [sol_data.(dataNames{lv2})];
                     end
