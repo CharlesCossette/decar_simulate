@@ -7,26 +7,11 @@ classdef demoSwarmController < handle %
     end
     
     methods
-        %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%% Constructor, Initial Condtions, Update %%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % Mandatory functions!
         function self = demoSwarmController(numAgents)
             % Constructor
             self.numAgents = numAgents;
         end
              
-        
-        function x0 = initialCondition(self)
-            % Initial conditions (if any).
-            x0 = [];
-            self.numStates = length(x0); 
-        end
-        
-        
-        function updateState(self,x)
-            % Nothing right now.
-        end
         
         %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%                  MAIN                 %%%%%%%%%%%%%%

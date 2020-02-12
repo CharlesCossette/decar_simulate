@@ -1,8 +1,14 @@
 
+% Create sim object
 sim = ContinuousSimulation();
 
 % Load Dynamics node
-sim.addNode(demoSwarmDynamics(4),'dynamics');
+%
+% Here you can see that you can instantiate the class first, modify some
+% properties, and then add the node.
+dyn = demoSwarmDynamics(4);
+dyn.initialPosition = [[12;12;4],[-50;20;-1],[4;5;1],[-40;-10;-4]];
+sim.addNode(dyn,'dynamics');
 
 % Load Controller node
 sim.addNode(demoSwarmController(4),'controller');

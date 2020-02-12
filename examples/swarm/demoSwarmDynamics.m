@@ -17,15 +17,15 @@ classdef demoSwarmDynamics < handle
         function self = demoSwarmDynamics(numAgents)
             % Constructor
             self.numAgents = numAgents;
-        end
-             
-        function x0 = initialCondition(self)
-            % Initial conditions
             r0 = normrnd(0,10,[3, self.numAgents]);
             v0 = zeros(size(r0));
             self.initialPosition = r0(:);
             self.initialVelocity = v0(:);
-            x0 = self.initialPosition;   
+        end
+             
+        function x0 = initialCondition(self)
+            % Initial conditions
+            x0 = self.initialPosition(:);   
         end
         
         
