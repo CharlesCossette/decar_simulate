@@ -28,4 +28,7 @@ function data = masterTwoAgents(t,nodes)
     data.r2 = r2;
     data.u1 = u1;
     data.u2 = u2;
+    data.dist = dist_12;
+    data.y_accel_1  = y1;
+    data.y_accel_2 = y2;
 end
