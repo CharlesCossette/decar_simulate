@@ -40,11 +40,6 @@ classdef DiscreteSimulation < handle
             % This function takes care of looping through the time span and
             % updating the nodes at each of their respective frequencies.
             
-            % Some error checking
-            if isempty(self.masterFunction)
-                error('You must supply a master function')
-            end
-            
             % Create waitbar
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
             
@@ -110,9 +105,6 @@ classdef DiscreteSimulation < handle
                 self.data.(dataNames{lv1}) = squeeze(self.data.(dataNames{lv1}));
             end
             dataOut = self.data;
-            
-            % Close waitbar
-            close(self.waitbarHandle)
         end 
         
     end
