@@ -10,7 +10,7 @@ sim = DiscreteSimulation();
 sim.addNode(ControllerNodeDiscreteMSD(),'controller',100)
 
 % Add dynamics node, arbitrarily named 'dynamics'.
-sim.addNode(DynamicsNodeDiscreteMSD(),'dynamics',100)
+sim.addNode(DynamicsNodeDiscreteMSD(),'dynamics',200)
 
 % Add master as function handle.
 sim.masterFunction = @masterDiscreteMSD;

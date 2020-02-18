@@ -24,7 +24,7 @@ classdef DynamicsNodeDiscreteMSD < handle
         end
                 
         function update(self,t)
-            % The update() function is called automatically be the
+            % The update() function is called automatically by the
             % simulator at the user-specified frequency. Do whatever you
             % want with this. The simulator time t is passed for reference.
             %

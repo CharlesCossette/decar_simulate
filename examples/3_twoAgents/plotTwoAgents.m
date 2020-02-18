@@ -10,6 +10,7 @@ xlabel('x')
 ylabel('y')
 zlabel('z')
 grid on
+title('Trajectory of two agents heading into each other')
 
 figure(2)
 plot(data.t, data.r1,'LineWidth',2)
@@ -33,7 +34,10 @@ ylabel('d (m)')
 title('Distance between agents')
 
 figure(4)
-plot(data.t, data.y_accel_1)
+plot(data.t, data.u1,'LineWidth',2)
 grid on
+xlabel('Time (s)','FontSize',14)
+ylabel('$\mathbf{u}$','interpreter','latex','FontSize',14)
+title('Control Effort')
 
 end

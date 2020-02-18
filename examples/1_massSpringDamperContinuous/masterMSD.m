@@ -47,3 +47,26 @@ function [x_dot, data] = masterMSD(t,x,nodes)
     % Concatenate structs from different nodes into a single data struct.
     data = catstruct(data_dynamics, data_controller);
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
