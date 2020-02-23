@@ -12,9 +12,6 @@ sim.addNode(ControllerNodeDiscreteMSD(),'controller',100)
 % Add dynamics node, arbitrarily named 'dynamics'.
 sim.addNode(DynamicsNodeDiscreteMSD(),'dynamics',200)
 
-% Add master as function handle.
-sim.masterFunction = @masterDiscreteMSD;
-
 % Run sim
 data = sim.run()
 

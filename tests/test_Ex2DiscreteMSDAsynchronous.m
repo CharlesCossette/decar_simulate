@@ -1,0 +1,91 @@
+%% Test - Asynchoronous MSD comparison with direct for loop
+% The controller runs at half the frequency as the dynamics.
+% Parameters and conditions
+params.m = 5;
+params.c = 1;
+params.k = 0.5;
+params.k_p = 3;
+params.k_d = 2;
+x0 = [5;0];
+tSpan = [0 10];
+freq = 100;
+contFreq = freq/10;
+% Run manually in discrete time
+N = (tSpan(2) - tSpan(1))*freq + 1;
+x = x0;
+xStore = zeros(length(x0)+1,N);
+tStore = zeros(N,1);
+dt = 1/freq;
+t = 0;
+
+for lv1 = 1:N
+
+    % Simple mass spring damper with PD controller
+    m = params.m;
+    c = params.c;
+    k = params.k;
+    k_p = params.k_p;
+    k_d = params.k_d;
+
+    r = x(1);
+    r_dot = x(2);
+    if abs(mod(t,(1/(contFreq)))) < 1e-10 || abs(abs(mod(t,(1/(contFreq)))) - (1/(contFreq))) < 1e-10
+        t
+        u = k_p*(0 - r) + k_d*(0 - r_dot);
+    else
+        stop = 1;
+    end
+    r_ddot = (1/m)*(u - k*r - c*r_dot);
+    x_dot = [r_dot; r_ddot];
+
+    x = x + dt*x_dot;
+    t = t + dt;
+    tStore(lv1) = t;
+    xStore(:,lv1) = [x;u];
+end
+
+% Run using custom framework, controller at 50 Hz, dynamics at 100 Hz
+sim = DiscreteSimulation();
+sim.timeSpan = tSpan;
+cont = ControllerNodeDiscreteMSD();
+cont.k_p = params.k_p;
+cont.k_d = params.k_d;
+dyn = DynamicsNodeDiscreteMSD();
+dyn.mass = params.m;
+dyn.dampingConstant = params.c;
+dyn.springConstant = params.k;
+dyn.position = x0(1);
+dyn.velocity = x0(2);
+sim.addNode(dyn,'dynamics',freq)
+sim.addNode(cont,'controller',contFreq)
+sim.masterFunction = @masterDiscreteMSD;
+data = sim.run();
+
+% Plot as visual check - position
+figure(1)
+plot(tStore,xStore(1,:).','LineWidth',2)
+hold on
+plot(data.t, data.r,'LineWidth',2)
+hold off
+grid on
+xlabel('Time (s)')
+ylabel('Position (m)')
+legend('Direct for-loop','decar-simulate')
+
+% Plot as visual check - control effort
+figure(2)
+plot(tStore,xStore(3,:).','LineWidth',2)
+hold on
+plot(data.t, data.u,'LineWidth',2)
+hold off
+grid on
+xlabel('Time (s)')
+ylabel('Position (m)')
+legend('Direct for-loop','decar-simulate')
+
+
+% Assert outputs are exactly the same.
+% Small floating point errors cause a tiny discrepancy
+%assert(all(tStore == data.t))
+%assert(all(xStore(1,:).' - data.r < 1e-13))
+%assert(all(xStore(2,:).' - data.v < 1e-13))

@@ -8,12 +8,12 @@ classdef ControllerNodeMSD < handle
     
     methods
         function self = ControllerNodeMSD()
-            self.k_p = -4;
-            self.k_d = -5.5;
+            self.k_p = 4;
+            self.k_d = 5.5;
         end
         
         function [u, data] = computeEffort(self,r,v)
-            u = self.k_p*r + self.k_d*v;
+            u = self.k_p*(0 - r) + self.k_d*(0 - v);
             
             data.p_term = self.k_p*r;
             data.d_term = self.k_d*v;

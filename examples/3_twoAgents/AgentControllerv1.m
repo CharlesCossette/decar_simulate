@@ -1,103 +1,120 @@
 classdef AgentControllerv1 < handle
     properties
         k_p
-        k_d
         k_c
-        r_des
+        r_zrw_a
+        method
+        outControlEffort
+        engagementRadius
         safetyRadius
-        activationRadius
-
-
-        distMeas
-        v_k_1
-        tOld
-        J_old
-        r_rel_old
-        dr_estimate
+        lowPassFreq
         maxEffort
-        minEffort
+        
+        % Input variables (must be updated in master)
+        r_zw_a
+        r_21_a
+        y_UWB
+    end
+    properties (Access = private)
+        % Working variables
+        dt
+        u
+        yLowPassOld = [0;0;0];
+        JOld = 0
+        tOld
+        r_21_a_old = [0;0;0];
     end
     methods
         function self = AgentControllerv1()
-            % Constructor - default properties
+            % Constructor
             self.k_p = 2;
-            self.k_d = 2.5;
             self.k_c = 1;
-            self.r_des = [0;0;0];
+            self.method = 'FD';
+            self.engagementRadius = 8;
             self.safetyRadius = 3;
-            self.activationRadius = 6;
-            
-            self.v_k_1 = 0;
+            self.lowPassFreq = 10;
             self.maxEffort = 40;
-            self.minEffort = -40;
-           
-        end
-        
-        function u = computeEffort(self,r,r_rel,y_dist)
-           % Computes the control effort on an agent.
-           
-           % Collision avoidance term using potential function
-           u_col = self.collisionAvoidance(r_rel, y_dist);
-           
-           % Add proportional control
-           u = self.k_p*(self.r_des - r) + self.k_c*u_col;
-           
-           % Controller saturation
-           u = max(min(u,self.maxEffort),self.minEffort);
-        end
-        
-        function u_col = collisionAvoidance(self, r_rel, y_dist)
-            
-            % Compute Potential
-            r_safe = self.safetyRadius;
-            r_engage = self.activationRadius;
-            J = min([0, (y_dist^2 - r_engage^2)/(y_dist^2 - r_safe^2)]);
-            
-            % Finite difference approximation to the gradient
-            if isempty(self.J_old)
-                self.J_old = J;
-            end
-            if isempty(self.r_rel_old)
-                self.r_rel_old = r_rel;
-            end
-            dJdr = (J - self.J_old)./(r_rel - self.r_rel_old);
-            self.J_old = J;
-            self.r_rel_old = r_rel;
-            
-            % Analytical Gradient
-%             d_rel = y_dist;
-%             if d_rel <= r_engage
-%                 dJdr = -(4*(r_engage^2 - r_safe^2)*(d_rel^2 - r_engage^2))/(d_rel^2 - r_safe^2)^3*r_rel;
-%             else
-%                 dJdr = zeros(3,1);
-%             end
-            
-            % Check if empty for whatever reason.
-            if isempty(dJdr) || y_dist > r_engage
-                dJdr = zeros(3,1);
-            end
-            % Get rid of nans and infs, caused by no position change.
-            for lv1 = 1:length(dJdr)
-                if isnan(dJdr(lv1)) || isinf(dJdr(lv1))
-                    dJdr(lv1) = 0;
-                end
-            end
-            u_col = -dJdr;
+            self.outControlEffort = [0;0;0];
         end
         
         function update(self,t)
-           % Need to double integrate the accelerometer to get an estimate
-           % for some position change during an interval.
-%            if isempty(self.tOld)
-%                self.tOld = t;
-%            end
-%            dt = t - self.tOld;
-%            y_accel = self.accelMeas;
-%            
-%            self.dr_estimate = dt*self.v_k_1 + dt^2*y_accel;
-%            self.v_k_1 = self.v_k_1 + dt*y_accel;
-%            self.tOld = t;
+            % Calculate dt
+            if isempty(self.tOld)
+                self.tOld = t; % Doing this means we detect the start time.
+            end
+            self.dt = t - self.tOld;
+            self.tOld = t;
+            
+            self.outControlEffort = self.updateEffort(self.dt, self.r_zw_a, ...
+                                                 self.r_zrw_a, self.r_21_a,...
+                                                 self.y_UWB);
         end
         
+        function u_tot = updateEffort(self,dt, r_1w_a, r_1rw_a, r_21_a, y_UWB)
+            
+            % Position error (setpoint - current position)
+            e = r_1rw_a - r_1w_a; 
+            
+            % Collision avoidance control effort
+            u_col = self.collisionAvoidance(dt, r_21_a, y_UWB);
+            
+            % Task-level control effort (go to waypoint
+            u_task = self.k_p*e;
+            
+            % Total control effort
+            u_tot = u_task + u_col;
+            
+            % Saturate
+            u_tot = max(min(u_tot, self.maxEffort), -self.maxEffort);
+            
+            self.u = u_tot;
+            
+        end    
+       
+    end
+    methods (Access = private)
+        function u_col = collisionAvoidance(self,dt, r_21_a, d_21)
+            % Potential function-based control law
+            
+            % Safety and activation radius
+            r_engage = self.engagementRadius;
+            r_safe = self.safetyRadius;
+            
+            % Two different strategies
+            if strcmp(self.method,'FD')
+                % Finite-difference collision avoidance scheme.
+                % Cost function
+                J = min([0,(d_21^2 - r_engage^2)/(d_21^2 - r_safe^2)])^2;
+                
+                % Finite difference gradient approximation
+                dJdr = -(J - self.JOld)./(r_21_a - self.r_21_a_old);
+                
+                % Get rid of nans and infs, caused by no position change.
+                for lv2 = 1:length(dJdr)
+                    if isnan(dJdr(lv2)) || isinf(dJdr(lv2))
+                        dJdr(lv2) = 0;
+                    end
+                end
+                
+                % Low-pass filter
+                dJdr = (1 - self.lowPassFreq*dt)*self.yLowPassOld ...
+                       + self.lowPassFreq*dt*dJdr;
+                
+                % Set old variables
+                self.JOld = J;
+                self.yLowPassOld = dJdr;
+                self.r_21_a_old = r_21_a;
+                
+            elseif strcmp(self.method,'analytical')
+                % Analytical gradient
+                if d_21 <= r_engage
+                     dJdr = -(4*(r_engage^2 - r_safe^2)*(d_21^2 - r_engage^2))/(d_21^2 - r_safe^2)^3*r_21_a;
+                else
+                     dJdr = zeros(3,1);
+                end
+            end
+            
+            u_col = -dJdr;
+        end
     end
 end
