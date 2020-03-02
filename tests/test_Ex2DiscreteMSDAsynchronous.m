@@ -7,8 +7,8 @@ params.k = 0.5;
 params.k_p = 3;
 params.k_d = 2;
 x0 = [5;0];
-tSpan = [0 10];
-freq = 100;
+tSpan = [0 3];
+freq = 10;
 contFreq = freq/10;
 % Run manually in discrete time
 N = (tSpan(2) - tSpan(1))*freq + 1;
@@ -29,8 +29,8 @@ for lv1 = 1:N
 
     r = x(1);
     r_dot = x(2);
+
     if abs(mod(t,(1/(contFreq)))) < 1e-10 || abs(abs(mod(t,(1/(contFreq)))) - (1/(contFreq))) < 1e-10
-        t
         u = k_p*(0 - r) + k_d*(0 - r_dot);
     else
         stop = 1;
@@ -38,10 +38,12 @@ for lv1 = 1:N
     r_ddot = (1/m)*(u - k*r - c*r_dot);
     x_dot = [r_dot; r_ddot];
 
-    x = x + dt*x_dot;
-    t = t + dt;
+    
     tStore(lv1) = t;
     xStore(:,lv1) = [x;u];
+    t = t + dt;
+    x = x + dt*x_dot;
+
 end
 
 % Run using custom framework, controller at 50 Hz, dynamics at 100 Hz
@@ -56,16 +58,16 @@ dyn.dampingConstant = params.c;
 dyn.springConstant = params.k;
 dyn.position = x0(1);
 dyn.velocity = x0(2);
+% TODO: order nodes are added is important.
 sim.addNode(dyn,'dynamics',freq)
 sim.addNode(cont,'controller',contFreq)
-sim.masterFunction = @masterDiscreteMSD;
 data = sim.run();
 
 % Plot as visual check - position
 figure(1)
-plot(tStore,xStore(1,:).','LineWidth',2)
+stairs(tStore,xStore(1,:).','LineWidth',2)
 hold on
-plot(data.t, data.r,'LineWidth',2)
+stairs(data.dynamics.t, data.dynamics.r,'LineWidth',2)
 hold off
 grid on
 xlabel('Time (s)')
@@ -74,9 +76,9 @@ legend('Direct for-loop','decar-simulate')
 
 % Plot as visual check - control effort
 figure(2)
-plot(tStore,xStore(3,:).','LineWidth',2)
+stairs(tStore,xStore(3,:).','LineWidth',2)
 hold on
-plot(data.t, data.u,'LineWidth',2)
+stairs(data.controller.t, data.controller.u,'LineWidth',2)
 hold off
 grid on
 xlabel('Time (s)')
@@ -86,6 +88,6 @@ legend('Direct for-loop','decar-simulate')
 
 % Assert outputs are exactly the same.
 % Small floating point errors cause a tiny discrepancy
-%assert(all(tStore == data.t))
-%assert(all(xStore(1,:).' - data.r < 1e-13))
-%assert(all(xStore(2,:).' - data.v < 1e-13))
+assert(all(abs(tStore - data.dynamics.t) < 1e-13))
+assert(all(abs(xStore(1,:).' - data.dynamics.r) < 1e-13))
+assert(all(abs(xStore(2,:).' - data.dynamics.v) < 1e-13))

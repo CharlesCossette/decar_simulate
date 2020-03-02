@@ -12,15 +12,14 @@ classdef DiscreteSimulation < handle
 % node update, until we reach the user provided end time.
     
     properties
-        masterFunction
         nodes
         nodeFrequencies
         nodeNumStates
+        nodeData
         timeSpan
     end
     properties (Access = private)
         waitbarHandle
-        data
     end
     
     methods
@@ -33,6 +32,7 @@ classdef DiscreteSimulation < handle
             % Add node to list of nodes
             self.nodes.(nodeName) = node;
             self.nodeFrequencies.(nodeName) = nodeFreq;
+            self.nodeData.(nodeName) = struct();
         end
 
         function dataOut = run(self)
@@ -53,13 +53,9 @@ classdef DiscreteSimulation < handle
             % Get node frequencies
             % store in a matrix instead of struct.
             nodeNames = fieldnames(self.nodes);
-            maxFreq = 0;
             nodeFreq = zeros(length(nodeNames),1);
             for lv1 = 1:length(nodeNames)
                 nodeFreq(lv1) = self.nodeFrequencies.(nodeNames{lv1});
-                %if nodeFreq(lv1) > maxFreq
-                    %maxFreq = nodeFreq(lv1);
-                %end
             end
 
             % Start and end times
@@ -67,35 +63,44 @@ classdef DiscreteSimulation < handle
             tEnd = self.timeSpan(end);
             
             % Column matrix stores the next time that node should be
-            % updated. Initlize all to tStart
+            % updated. Initialize all to tStart
             nodeNextUpdateTimes = tStart*ones(length(nodeFreq),1);
             t = tStart;
-            self.data = struct();
             
+            
+            % Check if it is time to update eacsh node.
+            for lv1 = 1:length(nodeNames)                        
+                % Update node state
+                node = self.nodes.(nodeNames{lv1});
+                if ismethod(node,'update')
+                    [~] = node.update(t);
+                end
+            end
+                
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
             while t <= tEnd
                 
-                data_k = struct();
-                
                 % Check if it is time to update each node.
+                % Note: a small tolerance of 1e-14 is used due to
+                % occaisional rounding errors.
                 for lv1 = 1:length(nodeNextUpdateTimes)
-                    if t == nodeNextUpdateTimes(lv1)
+                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-14
                         
                         % Update node state
                         node = self.nodes.(nodeNames{lv1});
                         if ismethod(node,'update')
-                            data_node = node.update(t);
-                            data_k = catstruct(data_k, data_node);
+                            data_node_k = node.update(t);
+                            
+                            % Append data 
+                            self.nodeData.(nodeNames{lv1}) = ...
+                                self.appendSimData(t,data_node_k, self.nodeData.(nodeNames{lv1})); 
                         end
                         
                         % Update next time to run update for this node.
                         nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
                     end
                 end
-    
-                % Append data 
-                self.appendSimData(t , data_k);
-                
+              
                 % Update waitbar
                 waitbar(t/tEnd,self.waitbarHandle);
                 
@@ -109,11 +114,15 @@ classdef DiscreteSimulation < handle
             
             % Final bit of post-processing
             % Squeeze to eliminate redundant dimensions.
-            dataNames = fieldnames(self.data);
-            for lv1 = 1:numel(dataNames)
-                self.data.(dataNames{lv1}) = squeeze(self.data.(dataNames{lv1}));
+            for lv1 = 1:length(nodeNames)
+                data = self.nodeData.(nodeNames{lv1});
+                dataNames = fieldnames(data);
+                for lv2 = 1:numel(dataNames)
+                    data.(dataNames{lv2}) = squeeze(data.(dataNames{lv2}));
+                end
+                self.nodeData.(nodeNames{lv1}) = data;
             end
-            dataOut = self.data;
+            dataOut = self.nodeData;
             
             % Close waitbar
             close(self.waitbarHandle)
@@ -122,48 +131,26 @@ classdef DiscreteSimulation < handle
     end
     
     methods (Access = private)
-        function appendSimData(self,t,data_k)
+        function data = appendSimData(~,t,data_k,data)
             % Get all the field names from the sol_data struct.
             % TODO - inefficient, memory not preallocated.
             data_k.t = t;            
             dataNames_k = fieldnames(data_k);
-            dataNames = fieldnames(self.data);
-            
-            % First, check to see if we are missing some fields in data_k
-            % that are in self.data
-            for lv1 = 1:length(dataNames)
-                if ~isfield(data_k,dataNames{lv1})
-                    % Field is missing in new data. Copy from previous
-                    % datapoint.
-                    % TODO - this is gross and complicated.
-                    % The reason we need to do this is we do not know the
-                    % dimension of the data until runtime (ex. could be a
-                    % vector, or a DCM). But the time data is in the last
-                    % dimension, and we need to concatenate in that
-                    % dimension.
-                    N = ndims(self.data.(dataNames{lv1}));
-                    inds = repmat({1},1,N);
-                    inds{N} = size(self.data.(dataNames{lv1}),N);
-                    temp = self.data.(dataNames{lv1});   
-                    N_point = ndims(temp(inds{:}));
-                    self.data.(dataNames{lv1}) = cat(N_point+1,temp,temp(inds{:}));
-                end
-            end
-            
+
             % Each field should contain only 1 value, so loop and keep
             % combining into a final data struct.
             for lv2 = 1:numel(dataNames_k)
-                if isfield(self.data, dataNames_k{lv2})
+                if isfield(data, dataNames_k{lv2})
                     % Check if there is a field already in self.data
                     
                     % If a field contains a matrix, append in the
                     % 3rd dimension. Generalized to N dimensions.
                     N = ndims(data_k.(dataNames_k{lv2}));
-                    self.data.(dataNames_k{lv2}) = cat(N + 1, self.data.(dataNames_k{lv2}),...
+                    data.(dataNames_k{lv2}) = cat(N + 1, data.(dataNames_k{lv2}),...
                                                      data_k.(dataNames_k{lv2}));
                 else
                     % Otherwise create the field.
-                    self.data.(dataNames_k{lv2}) = [data_k.(dataNames_k{lv2})];
+                    data.(dataNames_k{lv2}) = [data_k.(dataNames_k{lv2})];
                 end
             end
             

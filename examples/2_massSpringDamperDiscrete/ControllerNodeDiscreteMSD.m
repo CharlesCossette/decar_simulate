@@ -31,6 +31,7 @@ classdef ControllerNodeDiscreteMSD < handle
         end
         
         function data = update(self,t)
+            t
             self.u = self.k_p*(0 - self.r) + self.k_d*(0 - self.v);
             data.u = self.u; %TODO. really annoying to have to do this.
         end
