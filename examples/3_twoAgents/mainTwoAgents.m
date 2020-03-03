@@ -17,11 +17,11 @@ sim.addNode(agent2,'agent2',1000);
 % Add two agents' controllers
 agent1controller = AgentControllerv1(1);
 agent1controller.r_zrw_a = [-10;1;0.5];
-sim.addNode(agent1controller,'agent1controller',1000);
+sim.addNode(agent1controller,'agent1controller',100);
 
 agent2controller = AgentControllerv1(2);
 agent2controller.r_zrw_a = [10;-1;0.5];
-sim.addNode(agent2controller,'agent2controller',1000);
+sim.addNode(agent2controller,'agent2controller',100);
 
 % Add two agents' relative position sensor
 relpos1 = RelativePositionSensor(1);
