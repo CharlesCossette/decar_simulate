@@ -1,4 +1,4 @@
-classdef RelativePositionSensor < handle
+classdef RelativePositionSensorExample < handle
     properties (SetObservable)
         measurement  
     end
@@ -10,7 +10,7 @@ classdef RelativePositionSensor < handle
         numAgents
     end
     methods
-        function self = RelativePositionSensor(agentID)
+        function self = RelativePositionSensorExample(agentID)
             self.ID = agentID; % This sensor is on agent "ID"
             self.r_iz_a = zeros(3,100);
             self.r_iw_a = zeros(3,100);

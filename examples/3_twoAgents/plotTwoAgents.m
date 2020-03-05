@@ -13,9 +13,9 @@ grid on
 title('Trajectory of two agents heading into each other')
 
 figure(2)
-plot(data.agent1.t, data.agent1.r,'LineWidth',2)
+stairs(data.agent1.t, data.agent1.r.','LineWidth',2)
 hold on
-plot(data.agent2.t, data.agent2.r,'LineWidth',2)
+stairs(data.agent2.t, data.agent2.r.','LineWidth',2)
 hold off
 grid on
 xlabel('Time (s)','interpreter','latex','FontSize',14)
@@ -34,7 +34,7 @@ legend('agent1 x','agent1 y', 'agent1 z','agent2 x', 'agent2 y', 'agent2 z')
 % title('Distance between agents')
 
 figure(4)
-plot(data.agent1controller.t, data.agent1controller.u,'LineWidth',2)
+stairs(data.agent1controller.t, data.agent1controller.u.','LineWidth',2)
 grid on
 xlabel('Time (s)','interpreter','latex','FontSize',14)
 ylabel('$\mathbf{u}$','interpreter','latex','FontSize',14)

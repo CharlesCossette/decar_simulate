@@ -1,4 +1,4 @@
-classdef AgentControllerv1 < handle
+classdef AgentControllerExample < handle
     properties (SetObservable)
         controlEffort
     end
@@ -22,7 +22,7 @@ classdef AgentControllerv1 < handle
     end
     
     methods
-        function self = AgentControllerv1(agentID)
+        function self = AgentControllerExample(agentID)
             % Constructor
             self.ID = agentID;
             self.k_p = 2;

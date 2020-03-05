@@ -1,4 +1,4 @@
-classdef SingleIntegratorAgent < handle
+classdef AgentDynamicsExample < handle
     properties (SetObservable)
         ID
         position
@@ -9,7 +9,7 @@ classdef SingleIntegratorAgent < handle
         controlEffort
     end
     methods
-        function self = SingleIntegratorAgent(agentID)
+        function self = AgentDynamicsExample(agentID)
             % Constructor
             % Default initial conditions
             self.ID = agentID;
