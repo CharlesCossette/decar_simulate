@@ -17,10 +17,10 @@ classdef ControllerNodeDiscreteMSD < handle
             self.v = 0;
         end
         
-        function createListeners(self,nodes)
+        function listeners = createListeners(self,nodes)
             % Controller node listens to position and velocity
-            addlistener(nodes.dynamics,'position','PostSet',@self.cbPosition);
-            addlistener(nodes.dynamics,'velocity','PostSet',@self.cbVelocity);
+            listeners(1) = addlistener(nodes.dynamics,'position','PostSet',@self.cbPosition);
+            listeners(2) = addlistener(nodes.dynamics,'velocity','PostSet',@self.cbVelocity);
         end
 
         function cbPosition(self, src, evnt)

@@ -24,8 +24,8 @@ classdef DynamicsNodeDiscreteMSD < handle
             self.controlEffort = 0;
         end
         
-        function createListeners(self,nodes)
-            addlistener(nodes.controller, 'u', 'PostSet', @self.cbControlEffort);
+        function listeners = createListeners(self,nodes)
+            listeners = addlistener(nodes.controller, 'u', 'PostSet', @self.cbControlEffort);
         end
             
         function cbControlEffort(self, src, evnt)

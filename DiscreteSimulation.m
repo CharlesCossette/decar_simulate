@@ -16,6 +16,7 @@ classdef DiscreteSimulation < handle
         nodeFrequencies
         nodeNumStates
         nodeData
+        nodeListeners
         timeSpan
     end
     properties (Access = private)
@@ -35,7 +36,7 @@ classdef DiscreteSimulation < handle
             self.nodeData.(nodeName) = struct();
         end
 
-        function dataOut = run(self)
+        function data = run(self)
             % RUN SIMULATION 
             % This function takes care of looping through the time span and
             % updating the nodes at each of their respective frequencies.
@@ -115,19 +116,48 @@ classdef DiscreteSimulation < handle
             % Final bit of post-processing
             % Squeeze to eliminate redundant dimensions.
             for lv1 = 1:length(nodeNames)
-                data = self.nodeData.(nodeNames{lv1});
-                dataNames = fieldnames(data);
+                data_node = self.nodeData.(nodeNames{lv1});
+                dataNames = fieldnames(data_node);
                 for lv2 = 1:numel(dataNames)
-                    data.(dataNames{lv2}) = squeeze(data.(dataNames{lv2}));
+                    data_node.(dataNames{lv2}) = squeeze(data_node.(dataNames{lv2}));
                 end
-                self.nodeData.(nodeNames{lv1}) = data;
+                self.nodeData.(nodeNames{lv1}) = data_node;
             end
-            dataOut = self.nodeData;
+            data = self.nodeData;
             
             % Close waitbar
             close(self.waitbarHandle)
-        end 
+        end
         
+        function showGraph(self)
+            G = digraph();
+            nodeNames = fieldnames(self.nodes);
+            % Go through all the nodes
+            for lv1 = 1:numel(nodeNames)
+                listeners = self.nodeListeners.(nodeNames{lv1});
+                % Go through all the listeners to that node
+                for lv2 = 1:numel(listeners)
+                    L = listeners(lv2);
+                    % Go through all the nodes again to find out which node
+                    % it is listening to
+                    for lv3 = 1:numel(nodeNames)
+                        obj = L.Object{:};
+                        if obj == self.nodes.(nodeNames{lv3})
+                            G = addedge(G, nodeNames{lv3}, nodeNames{lv1});
+                            edgeLabels{numedges(G)} = L.Source{:}.Name;
+                        end
+                    end
+                            
+                end
+            end
+            
+            p = plot(G,'EdgeLabel',edgeLabels);
+            p.Marker = 's';
+            p.MarkerSize = 7;
+            p.NodeColor = 'r';
+            p.ArrowSize = 15;
+        end
+       
     end
     
     methods (Access = private)
@@ -157,10 +187,18 @@ classdef DiscreteSimulation < handle
         end
         function createListeners(self)
             % Run the createListeners method of all classes.
+            % If an output argument is returned, store it to create the
+            % interconnection graph.
             nodeNames = fieldnames(self.nodes);
+            self.nodeListeners = struct();
             for lv1 = 1:length(nodeNames)
                 if ismethod(self.nodes.(nodeNames{lv1}),'createListeners')
-                    self.nodes.(nodeNames{lv1}).createListeners(self.nodes)
+                    try
+                        varargout = self.nodes.(nodeNames{lv1}).createListeners(self.nodes);
+                        self.nodeListeners.(nodeNames{lv1}) = varargout;
+                    catch
+                        self.nodeListeners.(nodeNames{lv1}) = [];
+                    end
                 end
             end
         end
