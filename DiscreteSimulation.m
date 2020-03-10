@@ -1,15 +1,13 @@
 classdef DiscreteSimulation < handle
-%DISCRETESIMULATION class for running multiple nodes in parallel, at
-% difference frequencies. When you run a simulation with this class, it
-% basically does two things:
-%
-% 1) Checks to see what node needs to be updated next, and then
-%    updates that node by running node.update() function.
-% 2) Calls the user-supplied masterFunction() before any node gets
-%    updated.
-%
-% This continuously occurs, advancing the simulator time to the next
-% node update, until we reach the user provided end time.
+    %DISCRETESIMULATION class for running multiple nodes in parallel, at
+    % difference frequencies. When you run a simulation with this class, it
+    %
+    % 1) Checks to see what node needs to be updated next, and then
+    %    updates that node by running node.update(t) function.
+    % 2) Stores any data returned by the node.update(t) function.
+    %
+    % This continuously occurs, advancing the simulator time to the next
+    % node update, until we reach the user provided end time.
     
     properties
         nodes
@@ -35,9 +33,9 @@ classdef DiscreteSimulation < handle
             self.nodeFrequencies.(nodeName) = nodeFreq;
             self.nodeData.(nodeName) = struct();
         end
-
+        
         function data = run(self)
-            % RUN SIMULATION 
+            % RUN SIMULATION
             % This function takes care of looping through the time span and
             % updating the nodes at each of their respective frequencies.
             
@@ -58,7 +56,7 @@ classdef DiscreteSimulation < handle
             for lv1 = 1:length(nodeNames)
                 nodeFreq(lv1) = self.nodeFrequencies.(nodeNames{lv1});
             end
-
+            
             % Start and end times
             tStart = self.timeSpan(1);
             tEnd = self.timeSpan(end);
@@ -70,14 +68,14 @@ classdef DiscreteSimulation < handle
             
             
             % Check if it is time to update eacsh node.
-            for lv1 = 1:length(nodeNames)                        
+            for lv1 = 1:length(nodeNames)
                 % Update node state
                 node = self.nodes.(nodeNames{lv1});
                 if ismethod(node,'update')
                     [~] = node.update(t);
                 end
             end
-                
+            
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
             while t <= tEnd
                 
@@ -92,22 +90,22 @@ classdef DiscreteSimulation < handle
                         if ismethod(node,'update')
                             data_node_k = node.update(t);
                             
-                            % Append data 
+                            % Append data
                             self.nodeData.(nodeNames{lv1}) = ...
-                                self.appendSimData(t,data_node_k, self.nodeData.(nodeNames{lv1})); 
+                                self.appendSimData(t,data_node_k, self.nodeData.(nodeNames{lv1}));
                         end
                         
                         % Update next time to run update for this node.
                         nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
                     end
                 end
-              
+                
                 % Update waitbar
                 waitbar(t/tEnd,self.waitbarHandle);
                 
-                % Soonest update time 
+                % Soonest update time
                 tNext = min(nodeNextUpdateTimes);
-               
+                
                 % Go to soonest update time
                 t = tNext;
             end
@@ -130,7 +128,10 @@ classdef DiscreteSimulation < handle
         end
         
         function showGraph(self)
-            G = digraph();
+            if isempty(self.nodeListeners)
+                self.createListeners();
+            end
+            edgeTable = table([  ],[],'VariableNames',{'EndNodes' 'Label'});
             nodeNames = fieldnames(self.nodes);
             % Go through all the nodes
             for lv1 = 1:numel(nodeNames)
@@ -143,30 +144,34 @@ classdef DiscreteSimulation < handle
                     for lv3 = 1:numel(nodeNames)
                         obj = L.Object{:};
                         if obj == self.nodes.(nodeNames{lv3})
-                            G = addedge(G, nodeNames{lv3}, nodeNames{lv1});
-                            edgeLabels{numedges(G)} = L.Source{:}.Name;
+                            edgeTable = [edgeTable;{{nodeNames{lv3},nodeNames{lv1}},L.Source{:}.Name}];
                         end
                     end
-                            
+                    
                 end
             end
             
-            p = plot(G,'EdgeLabel',edgeLabels);
-            p.Marker = 's';
-            p.MarkerSize = 7;
-            p.NodeColor = 'r';
-            p.ArrowSize = 15;
+            G = digraph(edgeTable);
+            if numedges(G) > 0
+                p = plot(G,'EdgeLabel',G.Edges.Label);
+                p.Marker = 's';
+                p.MarkerSize = 7;
+                p.NodeColor = 'r';
+                p.ArrowSize = 15;
+            else
+                disp('No listeners in this simulation!')
+            end
         end
-       
+        
     end
     
     methods (Access = private)
         function data = appendSimData(~,t,data_k,data)
             % Get all the field names from the sol_data struct.
             % TODO - inefficient, memory not preallocated.
-            data_k.t = t;            
+            data_k.t = t;
             dataNames_k = fieldnames(data_k);
-
+            
             % Each field should contain only 1 value, so loop and keep
             % combining into a final data struct.
             for lv2 = 1:numel(dataNames_k)
@@ -177,7 +182,7 @@ classdef DiscreteSimulation < handle
                     % 3rd dimension. Generalized to N dimensions.
                     N = ndims(data_k.(dataNames_k{lv2}));
                     data.(dataNames_k{lv2}) = cat(N + 1, data.(dataNames_k{lv2}),...
-                                                     data_k.(dataNames_k{lv2}));
+                        data_k.(dataNames_k{lv2}));
                 else
                     % Otherwise create the field.
                     data.(dataNames_k{lv2}) = [data_k.(dataNames_k{lv2})];
@@ -203,4 +208,4 @@ classdef DiscreteSimulation < handle
             end
         end
     end
-end        
+end
