@@ -62,8 +62,7 @@ classdef DynamicsNodeDiscreteMSD < handle
         end
         
         function v_dot = computeAccel(self)
-            % Add whatever functions you want, which may or may not be
-            % called by master. 
+            % Add whatever other functions you want. 
             
             m = self.mass;
             k = self.springConstant;
