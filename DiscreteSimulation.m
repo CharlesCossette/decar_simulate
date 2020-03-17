@@ -1,6 +1,6 @@
 classdef DiscreteSimulation < handle
     %DISCRETESIMULATION class for running multiple nodes in parallel, at
-    % difference frequencies. When you run a simulation with this class, it
+    % different frequencies. When you run a simulation with this class, it
     %
     % 1) Checks to see what node needs to be updated next, and then
     %    updates that node by running node.update(t) function.
@@ -28,7 +28,17 @@ classdef DiscreteSimulation < handle
         end
         
         function addNode(self, node, nodeName, nodeFreq)
-            % Add node to list of nodes
+            % Add node to list of nodes.
+            % Inputs
+            % --------
+            % node - An instantiation of a a specific node object.
+            %
+            % nodeName - specific name to call that node, can be different
+            % from the class name.
+            %
+            % nodeFreq - node frequency in Hz. Can be different from all
+            % the other nodes.
+            
             self.nodes.(nodeName) = node;
             self.nodeFrequencies.(nodeName) = nodeFreq;
             self.nodeData.(nodeName) = struct();
@@ -67,9 +77,8 @@ classdef DiscreteSimulation < handle
             t = tStart;
             
             
-            % Check if it is time to update eacsh node.
+            % Run all the update() methods once to initialize everything.
             for lv1 = 1:length(nodeNames)
-                % Update node state
                 node = self.nodes.(nodeNames{lv1});
                 if ismethod(node,'update')
                     [~] = node.update(t);
@@ -144,7 +153,7 @@ classdef DiscreteSimulation < handle
                     for lv3 = 1:numel(nodeNames)
                         obj = L.Object{:};
                         if obj == self.nodes.(nodeNames{lv3})
-                            edgeTable = [edgeTable;{{nodeNames{lv3},nodeNames{lv1}},L.Source{:}.Name}];
+                            edgeTable = [edgeTable; {{nodeNames{lv3},nodeNames{lv1}},L.Source{:}.Name}];
                         end
                     end
                     
@@ -169,6 +178,7 @@ classdef DiscreteSimulation < handle
         function data = appendSimData(~,t,data_k,data)
             % Get all the field names from the sol_data struct.
             % TODO - inefficient, memory not preallocated.
+            % TODO - ACTUALLY DO THIS SOON. Would seriously improve speed.
             data_k.t = t;
             dataNames_k = fieldnames(data_k);
             

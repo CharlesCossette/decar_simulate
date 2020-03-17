@@ -30,6 +30,7 @@ for lv1 = 1:N
     r = x(1);
     r_dot = x(2);
 
+    % Stupid float rounding errors.
     if abs(mod(t,(1/(contFreq)))) < 1e-10 || abs(abs(mod(t,(1/(contFreq)))) - (1/(contFreq))) < 1e-10
         u = k_p*(0 - r) + k_d*(0 - r_dot);
     else

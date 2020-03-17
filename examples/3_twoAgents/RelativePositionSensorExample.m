@@ -16,15 +16,24 @@ classdef RelativePositionSensorExample < handle
             self.r_iw_a = zeros(3,100);
             self.r_zw_a = zeros(3,1);
         end
-        function createListeners(self,nodes)
+        
+        function listeners = createListeners(self,nodes)
             nodeNames = fieldnames(nodes);
             
             % Create listener for every agent in the simulation.
+            listeners = [];
             self.numAgents = 0;
             for lv1 = 1:numel(fieldnames(nodes))
-                if strcmp(nodeNames{lv1}, ['agent',num2str(lv1)]) && ...
+                nodeName = nodeNames{lv1};
+                % If node name starts with "agent", not equal to "agentID"
+                % and not longer than X characters.
+                % TODO: improve this..
+                if strcmp(nodeName(1:5), 'agent') && ...
+                   length(nodeName) <= 7 && ...
                   ~strcmp(nodeNames{lv1}, ['agent',num2str(self.ID)])
-                    addlistener(nodes.(nodeNames{lv1}),'position','PostSet',@self.cbRelPos)
+                    
+                    listeners = [listeners;
+                    addlistener(nodes.(nodeNames{lv1}),'position','PostSet',@self.cbRelPos)];
                     self.numAgents = self.numAgents + 1;
                 end
             end
@@ -32,7 +41,8 @@ classdef RelativePositionSensorExample < handle
             self.r_iw_a = zeros(3,self.numAgents);
             
             % Create listener for our own position
-            addlistener(nodes.(['agent',num2str(self.ID)]),'position','PostSet',@self.cbPosition)
+            listeners = [listeners; 
+                addlistener(nodes.(['agent',num2str(self.ID)]),'position','PostSet',@self.cbPosition)];
         end
         
         function cbPosition(self,src,evnt)
@@ -50,8 +60,10 @@ classdef RelativePositionSensorExample < handle
         end
         
         function data = update(self,t)
+            % Updates the actual measurement value (which is listened to)
+            % and returns the measurement value for data storage.
             self.measurement = self.r_iz_a;
-            data.y_uwb = self.measurement;
+            data.y_relpos = self.measurement;
         end
         
     end

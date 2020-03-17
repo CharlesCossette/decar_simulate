@@ -32,6 +32,12 @@ data = sim.run();
 % Assert outputs are exactly the same.
 assert(all(x(:,1).' == data.state(1,:)))
 assert(all(x(:,2).' == data.state(2,:)))
+plot(data.t,data.state(1,:),t,x(:,1).','LineWidth',2)
+grid on
+legend('Custom simulator','ode45')
+xlabel('Time (s)')
+ylabel('Position (m)')
+title('Test 1: Comparison with ODE45')
 
 function x_dot = MSDODE(t,x,params)
 % Simple mass spring damper with PD controller

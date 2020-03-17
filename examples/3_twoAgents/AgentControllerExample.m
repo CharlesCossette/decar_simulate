@@ -31,18 +31,20 @@ classdef AgentControllerExample < handle
             self.safetyRadius = 3;
             self.maxEffort = 40;
             self.r_21_a = [0;0;0];
+            self.r_zw_a = [0;0;0];
+           
         end
         
-        function createListeners(self,nodes)
-            addlistener(nodes.(['agent',num2str(self.ID)]), 'position', 'PostSet', @self.cbPosition);
-            addlistener(nodes.(['relPosSensor',num2str(self.ID)]), 'measurement', 'PostSet', @self.cbUwb);
+        function L = createListeners(self,nodes)
+            L(1) = addlistener(nodes.(['agent',num2str(self.ID)]), 'position', 'PostSet', @self.cbPosition);
+            L(2) = addlistener(nodes.(['relPosSensor',num2str(self.ID)]), 'measurement', 'PostSet', @self.cbUwb);
         end
         
-        function cbPosition(self,src,evnt)
+        function cbPosition(self,~,evnt)
             self.r_zw_a = evnt.AffectedObject.position;
         end
         
-        function cbUwb(self,src,evnt)
+        function cbUwb(self,~,evnt)
             y = evnt.AffectedObject.measurement;
             if isempty(y)
                 y = zeros(3,1);
@@ -101,36 +103,3 @@ classdef AgentControllerExample < handle
         end
     end
 end
-
-
-
-
-
-
-
-% Two different strategies
-%             if strcmp(self.method,'FD')
-%                 % Finite-difference collision avoidance scheme.
-%                 % Cost function
-%                 J = min([0,(d_21^2 - r_engage^2)/(d_21^2 - r_safe^2)])^2;
-%
-%                 % Finite difference gradient approximation
-%                 dJdr = -(J - self.JOld)./(r_21_a - self.r_21_a_old);
-%
-%                 % Get rid of nans and infs, caused by no position change.
-%                 for lv2 = 1:length(dJdr)
-%                     if isnan(dJdr(lv2)) || isinf(dJdr(lv2))
-%                         dJdr(lv2) = 0;
-%                     end
-%                 end
-%
-%                 % Low-pass filter
-%                 dJdr = (1 - self.lowPassFreq*dt)*self.yLowPassOld ...
-%                        + self.lowPassFreq*dt*dJdr;
-%
-%                 % Set old variables
-%                 self.JOld = J;
-%                 self.yLowPassOld = dJdr;
-%                 self.r_21_a_old = r_21_a;
-%
-%             elseif strcmp(self.method,'analytical')
