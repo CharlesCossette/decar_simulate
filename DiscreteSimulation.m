@@ -197,13 +197,11 @@ classdef DiscreteSimulation < handle
             nodeNames = fieldnames(self.nodes);
             self.nodeListeners = struct();
             for lv1 = 1:length(nodeNames)
-                if ismethod(self.nodes.(nodeNames{lv1}),'createListeners')
-                    try
-                        varargout = self.nodes.(nodeNames{lv1}).createListeners(self.nodes);
-                        self.nodeListeners.(nodeNames{lv1}) = varargout;
-                    catch
-                        self.nodeListeners.(nodeNames{lv1}) = [];
-                    end
+                try
+                    varargout = self.nodes.(nodeNames{lv1}).createListeners(self.nodes);
+                    self.nodeListeners.(nodeNames{lv1}) = varargout;
+                catch
+                    self.nodeListeners.(nodeNames{lv1}) = [];
                 end
             end
         end
