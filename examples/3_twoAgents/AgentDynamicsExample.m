@@ -18,9 +18,9 @@ classdef AgentDynamicsExample < handle
             self.controlEffort = [0;0;0];
         end
         
-        function createListeners(self,nodes)
-            addlistener(nodes.(['agent',num2str(self.ID),'controller']),...
-                'controlEffort','PostSet',@self.cbControlEffort)
+        function L = createListeners(self,nodes)
+            L = addlistener(nodes.(['agent',num2str(self.ID),'controller']),...
+                'controlEffort','PostSet',@self.cbControlEffort);
         end
         
         function cbControlEffort(self,src,evnt)

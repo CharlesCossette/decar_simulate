@@ -40,20 +40,21 @@ sim.addNode(dyn,'dynamics',freq)
 data = sim.run();
 
 % Plot as visual check
-plot(tStore,xStore(1,:).','LineWidth',2)
+stairs(tStore,xStore(1,:).','LineWidth',2)
 hold on
-plot(data.t, data.r,'LineWidth',2)
+stairs(data.dynamics.t, data.dynamics.r,'LineWidth',2)
 hold off
 grid on
 xlabel('Time (s)')
 ylabel('Position (m)')
 legend('Direct for-loop','decar-simulate')
+title('Comparison with a direct for loop')
 
 % Assert outputs are exactly the same.
 % Small floating point errors cause a tiny discrepancy
-assert(all(tStore == data.t))
-assert(all(xStore(1,:).' - data.r < 1e-13))
-assert(all(xStore(2,:).' - data.v < 1e-13))
+assert(all(tStore == data.dynamics.t))
+assert(all(xStore(1,:).' - data.dynamics.r < 1e-13))
+assert(all(xStore(2,:).' - data.dynamics.v < 1e-13))
 
 function x_k1 = MSDEuler(dt,x_k,params)
 % Simple mass spring damper with PD controller

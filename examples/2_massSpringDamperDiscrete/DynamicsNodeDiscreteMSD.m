@@ -1,5 +1,7 @@
 classdef DynamicsNodeDiscreteMSD < handle
-    properties (SetObservable,GetObservable)
+    % DYNAMICSNODEDISCRETEMSD - Mass-spring-damper dynamics, which listens
+    % to the the control effort from the controller node. 
+    properties (SetObservable)
         position
         velocity
         accel
@@ -14,7 +16,7 @@ classdef DynamicsNodeDiscreteMSD < handle
     
     methods
         function self = DynamicsNodeDiscreteMSD()
-            % Constructor - contains default settings
+            % Constructor - contains default parameters
             self.mass = 4; % kg
             self.springConstant = 0.4; % N/m
             self.dampingConstant = 0.1; % N/(m/s)
@@ -25,10 +27,12 @@ classdef DynamicsNodeDiscreteMSD < handle
         end
         
         function listeners = createListeners(self,nodes)
+            % Pass back listeners to construct graph.
             listeners = addlistener(nodes.controller, 'u', 'PostSet', @self.cbControlEffort);
         end
             
         function cbControlEffort(self, src, evnt)
+            % Store control effort.
             self.controlEffort = evnt.AffectedObject.u;
         end      
         function data = update(self, t)
@@ -58,8 +62,7 @@ classdef DynamicsNodeDiscreteMSD < handle
         end
         
         function v_dot = computeAccel(self)
-            % Add whatever functions you want, which may or may not be
-            % called by master. 
+            % Add whatever other functions you want. 
             
             m = self.mass;
             k = self.springConstant;
