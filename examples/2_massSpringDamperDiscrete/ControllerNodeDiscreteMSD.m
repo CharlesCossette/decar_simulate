@@ -44,6 +44,11 @@ classdef ControllerNodeDiscreteMSD < handle
             self.v = evnt.AffectedObject.velocity;
         end
         
+        function [handles, freq] = createExecutables(self)
+            % TODO: remove this, create an EKF example instead
+            handles = {@self.gainSchedule};
+            freq = 0.5;
+        end
         function data = update(self,t)
             % The update method is another special method that will be
             % called at the user-specified node frequency. Use this to
@@ -66,6 +71,13 @@ classdef ControllerNodeDiscreteMSD < handle
             % PD control with [0;0] setpoint.
             self.u = self.k_p*(0 - self.r) + self.k_d*(0 - self.v);
             data.u = self.u; 
+        end
+        
+        function gainSchedule(self,t)
+            if t > 10
+                self.k_p = 8;
+                self.k_d = 6;
+            end
         end
     end
     
