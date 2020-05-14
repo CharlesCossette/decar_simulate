@@ -21,7 +21,7 @@ classdef DiscreteSimulation < handle
     end
     properties (Access = private)
         waitbarHandle
-        hasOutput
+        numOutput
     end
     
     methods
@@ -85,14 +85,19 @@ classdef DiscreteSimulation < handle
             
             
             % Run all executables once to initialize everything.
-            % Check and note down whether function returns anything.
-            self.hasOutput = false(length(self.executables),1);
+            % Check and record how many variables does the function output.
+            self.numOutput = zeros(length(self.executables),1);
             for lv1 = 1:length(self.executables)
                 clear ans
                 exec = self.executables{lv1};
                 exec(t);
                 if exist('ans','var')
-                    self.hasOutput(lv1) = true;
+                    try 
+                        [~,~] = exec(t);
+                        self.numOutput(lv1) = 2;
+                    catch
+                        self.numOutput(lv1) = 1;
+                    end
                 end
             end
             
@@ -107,19 +112,35 @@ classdef DiscreteSimulation < handle
                     if abs(t - nodeNextUpdateTimes(lv1)) < 1e-14
                         
                         % Update node state
-                        exec = self.executables{lv1};
-                        
-                        if self.hasOutput(lv1)
+                        exec = self.executables{lv1};                        
+                        % Check number of outputs of the executable. 
+                        % If 2 outputs, then post-processing data and a
+                        % transferor are to be addressed.
+                        % If 1 output, then check which one is it.
+                        % TODO: 1) find a better way to address this than
+                        %          nested Try/Catch statements.
+                        if self.numOutput(lv1) == 2
                             % Run executable
-                            data_exec_k = exec(t);
+                            [data_exec_k, transferors] = exec(t);
 
                             % Append data
                             self.appendSimData(t,data_exec_k, lv1);
-                        else
-                            % Run executable
-                            exec(t);
+                            
+                            % Transfer data
+                            self.TransferData(transferors);
+                            
+                        elseif self.numOutput(lv1) == 1
+                            outputIter = exec(t);
+                            % check if output is postprocessing data or a transferor.
+                            if iscell(outputIter) % then, outputIter = transferor.
+                                % Transfer data
+                                self.TransferData(outputIter);
+                            else                  % then, outputIter = data_exec_k.
+                                % Append data
+                                self.appendSimData(t,outputIter,lv1);
+                            end
                         end
-                        
+
                         % Update next time to run update for this node.
                         nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
                     end
@@ -287,6 +308,26 @@ classdef DiscreteSimulation < handle
                         self.names = [self.names; [nodeName,'_',execName]];
                     end
                 end
+            end
+        end
+        
+        function TransferData(self,transferors)
+            % A function to transfer data between nodes. 
+            % Takes as input a cell of structs, where each object has the
+            % following 4 properties:
+            %   1) eventNode: Node to transfer data from.
+            %   2) eventArg: Property containing the data in source node.
+            %   3) listeningNode: Node to receive data.
+            %   4) listeningArg: Property to receive data in sink node.
+            % TODO: 1) Share timestamps.
+            for lv1 = 1:1:length(transferors)
+                iter = transferors{lv1};
+                eventNode     = iter.eventNode;
+                eventArg      = iter.eventArg;
+                listeningNode = iter.listeningNode;
+                listeningArg  = iter.listeningArg;
+                self.nodes.(listeningNode).(listeningArg) = ...
+                    self.nodes.(eventNode).(eventArg);
             end
         end
             

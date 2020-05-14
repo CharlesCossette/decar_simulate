@@ -26,15 +26,6 @@ classdef DynamicsNodeDiscreteMSD < handle
             self.controlEffort = 0;
         end
         
-        function listeners = createListeners(self,nodes)
-            % Pass back listeners to construct graph.
-            listeners = addlistener(nodes.controller, 'u', 'PostSet', @self.cbControlEffort);
-        end
-            
-        function cbControlEffort(self, src, evnt)
-            % Store control effort.
-            self.controlEffort = evnt.AffectedObject.u;
-        end      
         function data = update(self, t)
             % The update() function is called automatically by the
             % simulator at the user-specified frequency. Do whatever you
