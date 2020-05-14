@@ -83,14 +83,7 @@ classdef DiscreteSimulation < handle
             % Run all executables once to initialize everything.
             for lv1 = 1:length(self.executables)
                 exec = self.executables{lv1};
-                % Need to try-catch because the executable might
-                % not have any output arguments, in which case it
-                % would throw a "Too many output arguments" error. 
-                % TODO.. there must be a better way to do this.
-                try
-                    [~] = exec(t);
-                catch
-                end
+                exec(t);
             end
             
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -104,20 +97,38 @@ classdef DiscreteSimulation < handle
                         
                         % Update node state
                         exec = self.executables{lv1};
-                       
-                        % Need to try-catch because the executable might
-                        % not have any output arguments, in which case it
-                        % would throw a "Too many output arguments" error. 
-                        % TODO.. there must be a better way to do this.
+                        
+                        % Check number of outputs of the executable. 
+                        % If 2 outputs, then post-processing data and a
+                        % transferor are to be addressed.
+                        % If 1 output, then it is assumed that it is only
+                        % post-processing data.
+                        % TODO: 1) add a programmatic check in the case of 
+                        %          1 output to check wheter it's data or 
+                        %          transferor.
+                        %       2) find a better way to address this than
+                        %          nested Try/Catch statements.
                         try
-                            data_exec_k = exec(t);
+                            [data_exec_k, transferors] = exec(t);
 
                             % Append data
                             self.execData.(self.names{lv1}) = ...
                                 self.appendSimData(t,data_exec_k, self.execData.(self.names{lv1}));
+                            
+                            % Transfer data
+                            self.TransferData(transferors);
+                            
                         catch
+                            try
+                                data_exec_k = exec(t);
+
+                                % Append data
+                                self.execData.(self.names{lv1}) = ...
+                                    self.appendSimData(t,data_exec_k, self.execData.(self.names{lv1}));
+                            catch
+                            end
                         end
-                        
+
                         % Update next time to run update for this node.
                         nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
                     end
@@ -265,6 +276,24 @@ classdef DiscreteSimulation < handle
                         self.execData.([nodeName,'_',execName]) = struct();
                     end
                 end
+            end
+        end
+        
+        function TransferData(self,transferors)
+            % TODO: 1) add descripion
+            %       2) add description of structure of transferors
+            %       3) timestamps?
+            %       4) example
+            %       5) tests
+            %       6) compare time performance to listeners?
+            for lv1 = 1:1:length(transferors)
+                iter = transferors{lv1};
+                eventNode     = iter.eventNode;
+                eventArg      = iter.eventArg;
+                listeningNode = iter.listeningNode;
+                listeningArg  = iter.listeningArg;
+                self.nodes.(listeningNode).(listeningArg) = ...
+                    self.nodes.(eventNode).(eventArg);
             end
         end
             

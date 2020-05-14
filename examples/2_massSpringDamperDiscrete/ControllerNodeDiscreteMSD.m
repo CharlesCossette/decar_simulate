@@ -3,6 +3,11 @@ classdef ControllerNodeDiscreteMSD < handle
     % listens for position and velocity feedback and uses a PD control law.
     % Although this seems like a lot of overhead just to comply with this
     % simulator framework, this is useful for more complicated nodes.
+    properties
+        % Transferors
+        uTransferor
+    end
+    
     properties (SetObservable)
         k_p
         k_d
@@ -19,6 +24,12 @@ classdef ControllerNodeDiscreteMSD < handle
             self.u = 0;
             self.r = 0;
             self.v = 0;
+            
+            % Transferors
+            self.uTransferor.eventNode     = 'controller';
+            self.uTransferor.eventArg      = 'u';
+            self.uTransferor.listeningNode = 'dynamics';
+            self.uTransferor.listeningArg  = 'controlEffort';
         end
         
         function listeners = createListeners(self,nodes)
@@ -49,7 +60,7 @@ classdef ControllerNodeDiscreteMSD < handle
             handles = {@self.gainSchedule};
             freq = 0.5;
         end
-        function data = update(self,t)
+        function [data, transferors] = update(self,t)
             % The update method is another special method that will be
             % called at the user-specified node frequency. Use this to
             % update specific values (such as the control effort, in this
@@ -71,6 +82,7 @@ classdef ControllerNodeDiscreteMSD < handle
             % PD control with [0;0] setpoint.
             self.u = self.k_p*(0 - self.r) + self.k_d*(0 - self.v);
             data.u = self.u; 
+            transferors{1} = self.uTransferor;
         end
         
         function gainSchedule(self,t)
