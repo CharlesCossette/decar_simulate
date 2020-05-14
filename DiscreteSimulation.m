@@ -97,6 +97,7 @@ classdef DiscreteSimulation < handle
             end
             
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
+            tOld = 0;
             while t <= tEnd
                 
                 % Check if it is time to update each node.
@@ -107,18 +108,15 @@ classdef DiscreteSimulation < handle
                         
                         % Update node state
                         exec = self.executables{lv1};
-                       
-                        % Need to try-catch because the executable might
-                        % not have any output arguments, in which case it
-                        % would throw a "Too many output arguments" error. 
-                        % TODO.. there must be a better way to do this.
                         
                         if self.hasOutput(lv1)
+                            % Run executable
                             data_exec_k = exec(t);
 
                             % Append data
                             self.appendSimData(t,data_exec_k, lv1);
                         else
+                            % Run executable
                             exec(t);
                         end
                         
@@ -127,8 +125,11 @@ classdef DiscreteSimulation < handle
                     end
                 end
                 
-                % Update waitbar
-                waitbar(t/tEnd,self.waitbarHandle);
+                % Update waitbar at every 1% change
+                if tOld ~= round((t - tStart)/(tEnd - tStart)*100)
+                    waitbar((t - tStart)/(tEnd - tStart),self.waitbarHandle);
+                    tOld = round((t - tStart)/(tEnd - tStart)*100);
+                end
                 
                 % Soonest update time
                 tNext = min(nodeNextUpdateTimes);
