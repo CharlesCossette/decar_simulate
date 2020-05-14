@@ -11,11 +11,13 @@ classdef DiscreteSimulation < handle
     
     properties
         nodes
-        nodeFrequencies
-        nodeNumStates
-        nodeData
-        nodeListeners
+        nodeFrequencies % This will eventually get removed
+        nodeListeners % To be replaced
         timeSpan
+        executables
+        frequencies
+        names
+        execData
     end
     properties (Access = private)
         waitbarHandle
@@ -29,19 +31,21 @@ classdef DiscreteSimulation < handle
         
         function addNode(self, node, nodeName, nodeFreq)
             % Add node to list of nodes.
-            % Inputs
+            % Inputs:
             % --------
-            % node - An instantiation of a a specific node object.
+            % node: Object
+            %       An instantiation of a a specific node object.
             %
-            % nodeName - specific name to call that node, can be different
-            % from the class name.
+            % nodeName: string
+            %       specific name to call that node, can be different
+            %       from the class name.
             %
-            % nodeFreq - node frequency in Hz. Can be different from all
-            % the other nodes.
+            % nodeFreq: int
+            %       node frequency in Hz. Can be different from all
+            %       the other nodes.
             
             self.nodes.(nodeName) = node;
             self.nodeFrequencies.(nodeName) = nodeFreq;
-            self.nodeData.(nodeName) = struct();
         end
         
         function data = run(self)
@@ -59,13 +63,12 @@ classdef DiscreteSimulation < handle
             % Create listeners
             self.createListeners()
             
+            % Create executables (all asynchronous functions)
+            self.createExecutables()            
+            
             % Get node frequencies
             % store in a matrix instead of struct.
-            nodeNames = fieldnames(self.nodes);
-            nodeFreq = zeros(length(nodeNames),1);
-            for lv1 = 1:length(nodeNames)
-                nodeFreq(lv1) = self.nodeFrequencies.(nodeNames{lv1});
-            end
+            nodeFreq = self.frequencies;
             
             % Start and end times
             tStart = self.timeSpan(1);
@@ -77,11 +80,16 @@ classdef DiscreteSimulation < handle
             t = tStart;
             
             
-            % Run all the update() methods once to initialize everything.
-            for lv1 = 1:length(nodeNames)
-                node = self.nodes.(nodeNames{lv1});
-                if ismethod(node,'update')
-                    [~] = node.update(t);
+            % Run all executables once to initialize everything.
+            for lv1 = 1:length(self.executables)
+                exec = self.executables{lv1};
+                % Need to try-catch because the executable might
+                % not have any output arguments, in which case it
+                % would throw a "Too many output arguments" error. 
+                % TODO.. there must be a better way to do this.
+                try
+                    [~] = exec(t);
+                catch
                 end
             end
             
@@ -95,13 +103,19 @@ classdef DiscreteSimulation < handle
                     if abs(t - nodeNextUpdateTimes(lv1)) < 1e-14
                         
                         % Update node state
-                        node = self.nodes.(nodeNames{lv1});
-                        if ismethod(node,'update')
-                            data_node_k = node.update(t);
-                            
+                        exec = self.executables{lv1};
+                       
+                        % Need to try-catch because the executable might
+                        % not have any output arguments, in which case it
+                        % would throw a "Too many output arguments" error. 
+                        % TODO.. there must be a better way to do this.
+                        try
+                            data_exec_k = exec(t);
+
                             % Append data
-                            self.nodeData.(nodeNames{lv1}) = ...
-                                self.appendSimData(t,data_node_k, self.nodeData.(nodeNames{lv1}));
+                            self.execData.(self.names{lv1}) = ...
+                                self.appendSimData(t,data_exec_k, self.execData.(self.names{lv1}));
+                        catch
                         end
                         
                         % Update next time to run update for this node.
@@ -122,15 +136,15 @@ classdef DiscreteSimulation < handle
             
             % Final bit of post-processing
             % Squeeze to eliminate redundant dimensions.
-            for lv1 = 1:length(nodeNames)
-                data_node = self.nodeData.(nodeNames{lv1});
-                dataNames = fieldnames(data_node);
+            for lv1 = 1:length(self.executables)
+                data_exec = self.execData.(self.names{lv1});
+                dataNames = fieldnames(data_exec);
                 for lv2 = 1:numel(dataNames)
-                    data_node.(dataNames{lv2}) = squeeze(data_node.(dataNames{lv2}));
+                    data_exec.(dataNames{lv2}) = squeeze(data_exec.(dataNames{lv2}));
                 end
-                self.nodeData.(nodeNames{lv1}) = data_node;
+                self.execData.(self.names{lv1}) = data_exec;
             end
-            data = self.nodeData;
+            data = self.execData;
             
             % Close waitbar
             close(self.waitbarHandle)
@@ -215,5 +229,44 @@ classdef DiscreteSimulation < handle
                 end
             end
         end
+        
+        function createExecutables(self)
+            % Collects all the function handles that the user has returned
+            % as desired asynchrousnous executables, along with the
+            % frequencies at which to execute them.
+            nodeNames = fieldnames(self.nodes);
+            self.executables = {};
+            self.frequencies = [];
+            self.names = {};
+            for lv1 = 1:length(nodeNames)
+                % Add the update(t) function of each node as an executable.
+                % TODO - we could remove the update() function altogether
+                % now seeing as its just another executable.
+                nodeName = nodeNames{lv1};
+                node = self.nodes.(nodeName);
+                execName = 'update';
+                self.executables = [self.executables; {@node.update}];
+                self.frequencies = [self.frequencies; self.nodeFrequencies.(nodeNames{lv1})];
+                self.names = [self.names; [nodeName,'_',execName]];
+                self.execData.([nodeName,'_',execName]) = struct();
+                % Add any other user-specifed executables.
+                % TODO - add user error checking
+                if ismethod(self.nodes.(nodeName),'createExecutables')
+                    [handles, freqs] = self.nodes.(nodeName).createExecutables();
+                    for lv2 = 1:length(handles)
+                        exec = handles{lv2};
+                        freq = freqs(lv2);
+                        execName = func2str(exec);
+                        execName = erase(execName,'@(varargin)self.');
+                        execName = erase(execName,'(varargin{:})');
+                        self.executables = [self.executables; {exec}];
+                        self.frequencies = [self.frequencies; freq];
+                        self.names = [self.names; [nodeName,'_',execName]];
+                        self.execData.([nodeName,'_',execName]) = struct();
+                    end
+                end
+            end
+        end
+            
     end
 end

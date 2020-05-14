@@ -68,7 +68,7 @@ data = sim.run();
 figure(1)
 stairs(tStore,xStore(1,:).','LineWidth',2)
 hold on
-stairs(data.dynamics.t, data.dynamics.r,'LineWidth',2)
+stairs(data.dynamics_update.t, data.dynamics_update.r,'LineWidth',2)
 hold off
 grid on
 xlabel('Time (s)')
@@ -79,7 +79,7 @@ legend('Direct for-loop','decar-simulate')
 figure(2)
 stairs(tStore,xStore(3,:).','LineWidth',2)
 hold on
-stairs(data.controller.t, data.controller.u,'LineWidth',2)
+stairs(data.controller_update.t, data.controller_update.u,'LineWidth',2)
 hold off
 grid on
 xlabel('Time (s)')
@@ -89,6 +89,6 @@ legend('Direct for-loop','decar-simulate')
 
 % Assert outputs are exactly the same.
 % Small floating point errors cause a tiny discrepancy
-assert(all(abs(tStore - data.dynamics.t) < 1e-13))
-assert(all(abs(xStore(1,:).' - data.dynamics.r) < 1e-13))
-assert(all(abs(xStore(2,:).' - data.dynamics.v) < 1e-13))
+assert(all(abs(tStore - data.dynamics_update.t) < 1e-13))
+assert(all(abs(xStore(1,:).' - data.dynamics_update.r) < 1e-13))
+assert(all(abs(xStore(2,:).' - data.dynamics_update.v) < 1e-13))
