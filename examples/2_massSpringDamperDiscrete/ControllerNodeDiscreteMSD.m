@@ -25,7 +25,10 @@ classdef ControllerNodeDiscreteMSD < handle
             self.r = 0;
             self.v = 0;
             
-            % Transferors
+            % Transferors: set up a transferor that takes the u property 
+            % from the controller node and updates the controlEffort 
+            % property of the dynamics node. These are the 4 properties all
+            % transferors should have.
             self.uTransferor.eventNode     = 'controller';
             self.uTransferor.eventArg      = 'u';
             self.uTransferor.listeningNode = 'dynamics';
@@ -82,6 +85,14 @@ classdef ControllerNodeDiscreteMSD < handle
             % PD control with [0;0] setpoint.
             self.u = self.k_p*(0 - self.r) + self.k_d*(0 - self.v);
             data.u = self.u; 
+            
+            % Execute the data transferor associated with the uTransferor
+            % property after the update function. 
+            % An alternative would be to have a special-purpose executable
+            % in the Dynamics node that transfers the data only before it
+            % is used.
+            % Multiple transferors would be specified as distinct elements
+            % of a cell.
             transferors{1} = self.uTransferor;
         end
         

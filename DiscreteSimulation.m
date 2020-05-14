@@ -101,12 +101,8 @@ classdef DiscreteSimulation < handle
                         % Check number of outputs of the executable. 
                         % If 2 outputs, then post-processing data and a
                         % transferor are to be addressed.
-                        % If 1 output, then it is assumed that it is only
-                        % post-processing data.
-                        % TODO: 1) add a programmatic check in the case of 
-                        %          1 output to check wheter it's data or 
-                        %          transferor.
-                        %       2) find a better way to address this than
+                        % If 1 output, then check which one is it.
+                        % TODO: 1) find a better way to address this than
                         %          nested Try/Catch statements.
                         try
                             [data_exec_k, transferors] = exec(t);
@@ -120,11 +116,17 @@ classdef DiscreteSimulation < handle
                             
                         catch
                             try
-                                data_exec_k = exec(t);
-
-                                % Append data
-                                self.execData.(self.names{lv1}) = ...
-                                    self.appendSimData(t,data_exec_k, self.execData.(self.names{lv1}));
+                                outputIter = exec(t);
+                                
+                                % check if output is postprocessing data or a transferor.
+                                if iscell(outputIter) % then, outputIter = transferor.
+                                    % Transfer data
+                                    self.TransferData(transferors);
+                                else                  % then, outputIter = data_exec_k.
+                                    % Append data
+                                    self.execData.(self.names{lv1}) = ...
+                                        self.appendSimData(t,outputIter, self.execData.(self.names{lv1}));
+                                end
                             catch
                             end
                         end
@@ -280,12 +282,16 @@ classdef DiscreteSimulation < handle
         end
         
         function TransferData(self,transferors)
-            % TODO: 1) add descripion
-            %       2) add description of structure of transferors
-            %       3) timestamps?
-            %       4) example
-            %       5) tests
-            %       6) compare time performance to listeners?
+            % A function to transfer data between nodes. 
+            % Takes as input a cell of structs, where each object has the
+            % following 4 properties:
+            %   1) eventNode: Node to transfer data from.
+            %   2) eventArg: Property containing the data in source node.
+            %   3) listeningNode: Node to receive data.
+            %   4) listeningArg: Property to receive data in sink node.
+            % TODO: 1) timestamps?
+            %       2) tests
+            %       3) compare time performance to listeners?
             for lv1 = 1:1:length(transferors)
                 iter = transferors{lv1};
                 eventNode     = iter.eventNode;

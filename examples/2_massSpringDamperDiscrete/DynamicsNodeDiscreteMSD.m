@@ -26,6 +26,7 @@ classdef DynamicsNodeDiscreteMSD < handle
             self.controlEffort = 0;
         end
         
+        % TODO: remove.
 %         function listeners = createListeners(self,nodes)
 %             % Pass back listeners to construct graph.
 %             listeners = addlistener(nodes.controller, 'u', 'PostSet', @self.cbControlEffort);
