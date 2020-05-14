@@ -140,17 +140,9 @@ classdef DiscreteSimulation < handle
             % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             
             % Final bit of post-processing
-            % Squeeze to eliminate redundant dimensions.
-            for lv1 = 1:length(self.executables)
-                if isfield(self.execData,self.names{lv1})
-                    data_exec = self.execData.(self.names{lv1});
-                    dataNames = fieldnames(data_exec);
-                    for lv2 = 1:numel(dataNames)
-                        data_exec.(dataNames{lv2}) = squeeze(data_exec.(dataNames{lv2}));
-                    end
-                    self.execData.(self.names{lv1}) = data_exec;
-                end
-            end
+            self.squeezeData()
+            
+            % Return the executables data
             data = self.execData;
             
             % Close waitbar
@@ -216,7 +208,6 @@ classdef DiscreteSimulation < handle
                 end
             end
             
-            
             % Data has already been preallocated
             indx = round((t - self.timeSpan(1))*self.frequencies(execNumber)) + 1;
             S.type = '()';
@@ -231,6 +222,20 @@ classdef DiscreteSimulation < handle
                 self.execData.(execName).(dataNames_k{lv1}) = subsasgn(self.execData.(execName).(dataNames_k{lv1}),S,data_k.(dataNames_k{lv1}));
             end
             
+        end
+        
+        function squeezeData(self)
+            % Squeeze to eliminate redundant dimensions.
+            for lv1 = 1:length(self.executables)
+                if isfield(self.execData,self.names{lv1})
+                    data_exec = self.execData.(self.names{lv1});
+                    dataNames = fieldnames(data_exec);
+                    for lv2 = 1:numel(dataNames)
+                        data_exec.(dataNames{lv2}) = squeeze(data_exec.(dataNames{lv2}));
+                    end
+                    self.execData.(self.names{lv1}) = data_exec;
+                end
+            end
         end
         function createListeners(self)
             % Run the createListeners method of all classes.
@@ -266,7 +271,7 @@ classdef DiscreteSimulation < handle
                 self.executables = [self.executables; {@node.update}];
                 self.frequencies = [self.frequencies; self.nodeFrequencies.(nodeNames{lv1})];
                 self.names = [self.names; [nodeName,'_',execName]];
-                %self.execData.([nodeName,'_',execName]) = {};
+
                 % Add any other user-specifed executables.
                 % TODO - add user error checking
                 if ismethod(self.nodes.(nodeName),'createExecutables')
@@ -280,7 +285,6 @@ classdef DiscreteSimulation < handle
                         self.executables = [self.executables; {exec}];
                         self.frequencies = [self.frequencies; freq];
                         self.names = [self.names; [nodeName,'_',execName]];
-                        %self.execData.([nodeName,'_',execName]) = {};
                     end
                 end
             end
