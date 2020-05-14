@@ -13,7 +13,9 @@ sim.addNode(ControllerNodeDiscreteMSD(),'controller',100)
 sim.addNode(DynamicsNodeDiscreteMSD(),'dynamics',200)
 
 % Run sim, output data stored in a struct
+tic
 data = sim.run()
+toc
 
 % Graph shows how all the nodes are connected
 sim.showGraph()
