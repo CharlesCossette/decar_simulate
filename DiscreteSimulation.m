@@ -184,8 +184,13 @@ classdef DiscreteSimulation < handle
             if isempty(self.nodeListeners)
                 self.createListeners();
             end
+            if isempty(self.nodeTransferors)
+                self.createTransferors();
+            end
             edgeTable = table([  ],[],'VariableNames',{'EndNodes' 'Label'});
             nodeNames = fieldnames(self.nodes);
+            
+            % Listeners
             % Go through all the nodes
             for lv1 = 1:numel(nodeNames)
                 listeners = self.nodeListeners.(nodeNames{lv1});
@@ -201,6 +206,17 @@ classdef DiscreteSimulation < handle
                         end
                     end
                     
+                end
+            end
+            
+            % Transferors
+            for lv1 = 1:numel(nodeNames)
+                if isfield(self.nodeTransferors, nodeNames{lv1})
+                    transferors = self.nodeTransferors.(nodeNames{lv1});
+                    for lv2 = 1:length(transferors)  
+                        T = transferors{lv2};
+                        edgeTable = [edgeTable; {{T.eventNode,T.listeningNode},T.eventArg}];
+                    end
                 end
             end
             
