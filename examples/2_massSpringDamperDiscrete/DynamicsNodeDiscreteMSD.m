@@ -69,4 +69,24 @@ classdef DynamicsNodeDiscreteMSD < handle
         
 
     end
+    
+    methods (Static)
+        function transferors = createTransferors()
+            % The createTransferors() function is a special function that
+            % will be called at the beginning of the simulation. Use this
+            % to create listeners to other nodes. 
+            
+            % Dynamics node listens to control effort.
+            % Set up a transferor that takes the u property from the 
+            % controller node and updates the controlEffort property of the 
+            % dynamics node. These are the 4 properties all transferors 
+            % should have:
+            uTransferor.eventNode     = 'controller';
+            uTransferor.eventArg      = 'u';
+            uTransferor.listeningNode = 'dynamics';
+            uTransferor.listeningArg  = 'controlEffort'; 
+            
+            transferors{1} = uTransferor;
+        end
+    end
 end
