@@ -13,6 +13,7 @@ classdef DiscreteSimulation < handle
         nodes
         nodeFrequencies % This will eventually get removed
         nodeListeners % To be replaced
+        nodeTransferors
         timeSpan
         executables
         frequencies
@@ -21,7 +22,8 @@ classdef DiscreteSimulation < handle
     end
     properties (Access = private)
         waitbarHandle
-        numOutput
+        hasOutput
+        execNodes
     end
     
     methods
@@ -67,6 +69,9 @@ classdef DiscreteSimulation < handle
             % Create listeners
             self.createListeners()
             
+            % Create transferors
+            self.createTransferors()
+            
             % Create executables (all asynchronous functions)
             self.createExecutables()            
             
@@ -85,61 +90,64 @@ classdef DiscreteSimulation < handle
             
             
             % Run all executables once to initialize everything.
-            % Check and record how many variables does the function output.
-            self.numOutput = zeros(length(self.executables),1);
+            % Check and record if the function has an output.
+            self.hasOutput = false(length(self.executables),1);
+            iterNode       = ''; 
             for lv1 = 1:length(self.executables)
                 clear ans
                 exec = self.executables{lv1};
+                
+                % Run transferor
+                % First, check if any other nodes have been updated since
+                % the last time this node was updated.
+                if ~strcmp(iterNode,self.execNodes{lv1})
+                    iterNode = self.execNodes{lv1};
+                    % Then check if this node has a transferor.
+                    if isfield(self.nodeTransferors, iterNode)
+                        self.TransferData(self.nodeTransferors.(iterNode));
+                    end
+                end
+                
                 exec(t);
                 if exist('ans','var')
-                    try 
-                        [~,~] = exec(t);
-                        self.numOutput(lv1) = 2;
-                    catch
-                        self.numOutput(lv1) = 1;
-                    end
+                    self.hasOutput(lv1) = true;
                 end
             end
             
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
-            tOld = 0;
+            tOld     = 0;
+            iterNode = ''; 
             while t <= tEnd
                 
                 % Check if it is time to update each node.
-                % Note: a small tolerance of 1e-14 is used due to
-                % occaisional rounding errors.
+                % Note: a small tolerance of 1e-9 is used due to
+                % accumulating rounding errors.
+                % TODO: 1) Find a way to deal with the rounding errors, 
+                %          as they will become even larger with longer 
+                %          simulations.
                 for lv1 = 1:length(nodeNextUpdateTimes)
-                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-14
-                        
+                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-9 
                         % Update node state
                         exec = self.executables{lv1};                        
-                        % Check number of outputs of the executable. 
-                        % If 2 outputs, then post-processing data and a
-                        % transferor are to be addressed.
-                        % If 1 output, then check which one is it.
-                        % TODO: 1) find a better way to address this than
-                        %          nested Try/Catch statements.
-                        if self.numOutput(lv1) == 2
-                            % Run executable
-                            [data_exec_k, transferors] = exec(t);
-
-                            % Append data
-                            self.appendSimData(t,data_exec_k, lv1);
-                            
-                            % Transfer data
-                            self.TransferData(transferors);
-                            
-                        elseif self.numOutput(lv1) == 1
-                            outputIter = exec(t);
-                            % check if output is postprocessing data or a transferor.
-                            if iscell(outputIter) % then, outputIter = transferor.
-                                % Transfer data
-                                self.TransferData(outputIter);
-                            else                  % then, outputIter = data_exec_k.
-                                % Append data
-                                self.appendSimData(t,outputIter,lv1);
+                        
+                        % Run transferor
+                        % First, check if any other nodes have been updated since
+                        % the last time this node was updated.
+                        if ~strcmp(iterNode,self.execNodes{lv1})
+                            iterNode = self.execNodes{lv1};
+                            % Then check if this node has a transferor.
+                            if isfield(self.nodeTransferors, iterNode)
+                                self.TransferData(self.nodeTransferors.(iterNode));
                             end
-                        elseif self.numOutput(lv1) == 0
+                        end
+                        
+                        % Check number of outputs of the executable. 
+                        if self.hasOutput(lv1)
+                            % Run executable
+                            data_exec_k = exec(t);
+                            % Append data
+                            self.appendSimData(t,data_exec_k,lv1);
+                        else
                             exec(t);
                         end
 
@@ -276,6 +284,21 @@ classdef DiscreteSimulation < handle
             end
         end
         
+        function createTransferors(self)
+            % Run the createTransferors method of all classes.
+            % TODO: 1) Update the interconnection graph to include
+            %          transferors.
+            self.nodeTransferors = struct();
+            nodeNames = fieldnames(self.nodes);
+            for lv1 = 1:length(nodeNames)
+                nodeName = nodeNames{lv1};
+                if ismethod(self.nodes.(nodeName),'createTransferors')
+                    transferors = self.nodes.(nodeName).createTransferors();
+                    self.nodeTransferors.(nodeName) = transferors; 
+                end
+            end
+        end
+        
         function createExecutables(self)
             % Collects all the function handles that the user has returned
             % as desired asynchrousnous executables, along with the
@@ -283,6 +306,7 @@ classdef DiscreteSimulation < handle
             nodeNames = fieldnames(self.nodes);
             self.executables = {};
             self.frequencies = [];
+            self.execNodes   = {};
             self.names = {};
             for lv1 = 1:length(nodeNames)
                 % Add the update(t) function of each node as an executable.
@@ -293,6 +317,7 @@ classdef DiscreteSimulation < handle
                 execName = 'update';
                 self.executables = [self.executables; {@node.update}];
                 self.frequencies = [self.frequencies; self.nodeFrequencies.(nodeNames{lv1})];
+                self.execNodes   = [self.execNodes; {nodeName}];
                 self.names = [self.names; [nodeName,'_',execName]];
 
                 % Add any other user-specifed executables.
@@ -307,6 +332,7 @@ classdef DiscreteSimulation < handle
                         execName = erase(execName,'(varargin{:})');
                         self.executables = [self.executables; {exec}];
                         self.frequencies = [self.frequencies; freq];
+                        self.execNodes   = [self.execNodes; {nodeName}];
                         self.names = [self.names; [nodeName,'_',execName]];
                     end
                 end

@@ -3,10 +3,6 @@ classdef ControllerNodeDiscreteMSD < handle
     % listens for position and velocity feedback and uses a PD control law.
     % Although this seems like a lot of overhead just to comply with this
     % simulator framework, this is useful for more complicated nodes.
-    properties
-        % Transferors
-        uTransferor
-    end
     
     properties (SetObservable)
         k_p
@@ -24,15 +20,6 @@ classdef ControllerNodeDiscreteMSD < handle
             self.u = 0;
             self.r = 0;
             self.v = 0;
-            
-            % Transferors: set up a transferor that takes the u property 
-            % from the controller node and updates the controlEffort 
-            % property of the dynamics node. These are the 4 properties all
-            % transferors should have.
-            self.uTransferor.eventNode     = 'controller';
-            self.uTransferor.eventArg      = 'u';
-            self.uTransferor.listeningNode = 'dynamics';
-            self.uTransferor.listeningArg  = 'controlEffort';
         end
         
         function listeners = createListeners(self,nodes)
@@ -63,7 +50,7 @@ classdef ControllerNodeDiscreteMSD < handle
             handles = {@self.gainSchedule};
             freq = 0.5;
         end
-        function [data, transferors] = update(self,t)
+        function data = update(self,t)
             % The update method is another special method that will be
             % called at the user-specified node frequency. Use this to
             % update specific values (such as the control effort, in this
@@ -85,15 +72,6 @@ classdef ControllerNodeDiscreteMSD < handle
             % PD control with [0;0] setpoint.
             self.u = self.k_p*(0 - self.r) + self.k_d*(0 - self.v);
             data.u = self.u; 
-            
-            % Execute the data transferor associated with the uTransferor
-            % property after the update function. 
-            % An alternative would be to have a special-purpose executable
-            % in the Dynamics node that transfers the data only before it
-            % is used.
-            % Multiple transferors would be specified as distinct elements
-            % of a cell.
-            transferors{1} = self.uTransferor;
         end
         
         function gainSchedule(self,t)
