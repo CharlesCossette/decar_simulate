@@ -21,6 +21,7 @@ classdef DiscreteSimulation < handle
     end
     properties (Access = private)
         waitbarHandle
+        numOutput
     end
     
     methods
@@ -57,6 +58,9 @@ classdef DiscreteSimulation < handle
             F = findall(0,'type','figure','tag','TMWWaitbar');
             delete(F)
             
+            % Clear old data if any
+            self.execData = struct();
+            
             % Create waitbar
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
             
@@ -81,19 +85,24 @@ classdef DiscreteSimulation < handle
             
             
             % Run all executables once to initialize everything.
+            % Check and record how many variables does the function output.
+            self.numOutput = zeros(length(self.executables),1);
             for lv1 = 1:length(self.executables)
+                clear ans
                 exec = self.executables{lv1};
-                % Need to try-catch because the executable might
-                % not have any output arguments, in which case it
-                % would throw a "Too many output arguments" error. 
-                % TODO.. there must be a better way to do this.
-                try
-                    [~] = exec(t);
-                catch
+                exec(t);
+                if exist('ans','var')
+                    try 
+                        [~,~] = exec(t);
+                        self.numOutput(lv1) = 2;
+                    catch
+                        self.numOutput(lv1) = 1;
+                    end
                 end
             end
             
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
+            tOld = 0;
             while t <= tEnd
                 
                 % Check if it is time to update each node.
@@ -103,28 +112,45 @@ classdef DiscreteSimulation < handle
                     if abs(t - nodeNextUpdateTimes(lv1)) < 1e-14
                         
                         % Update node state
-                        exec = self.executables{lv1};
-                       
-                        % Need to try-catch because the executable might
-                        % not have any output arguments, in which case it
-                        % would throw a "Too many output arguments" error. 
-                        % TODO.. there must be a better way to do this.
-                        try
-                            data_exec_k = exec(t);
+                        exec = self.executables{lv1};                        
+                        % Check number of outputs of the executable. 
+                        % If 2 outputs, then post-processing data and a
+                        % transferor are to be addressed.
+                        % If 1 output, then check which one is it.
+                        % TODO: 1) find a better way to address this than
+                        %          nested Try/Catch statements.
+                        if self.numOutput(lv1) == 2
+                            % Run executable
+                            [data_exec_k, transferors] = exec(t);
 
                             % Append data
-                            self.execData.(self.names{lv1}) = ...
-                                self.appendSimData(t,data_exec_k, self.execData.(self.names{lv1}));
-                        catch
+                            self.appendSimData(t,data_exec_k, lv1);
+                            
+                            % Transfer data
+                            self.TransferData(transferors);
+                            
+                        elseif self.numOutput(lv1) == 1
+                            outputIter = exec(t);
+                            % check if output is postprocessing data or a transferor.
+                            if iscell(outputIter) % then, outputIter = transferor.
+                                % Transfer data
+                                self.TransferData(outputIter);
+                            else                  % then, outputIter = data_exec_k.
+                                % Append data
+                                self.appendSimData(t,outputIter,lv1);
+                            end
                         end
-                        
+
                         % Update next time to run update for this node.
                         nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
                     end
                 end
                 
-                % Update waitbar
-                waitbar(t/tEnd,self.waitbarHandle);
+                % Update waitbar at every 1% change
+                if tOld ~= round((t - tStart)/(tEnd - tStart)*100)
+                    waitbar((t - tStart)/(tEnd - tStart),self.waitbarHandle);
+                    tOld = round((t - tStart)/(tEnd - tStart)*100);
+                end
                 
                 % Soonest update time
                 tNext = min(nodeNextUpdateTimes);
@@ -135,15 +161,9 @@ classdef DiscreteSimulation < handle
             % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             
             % Final bit of post-processing
-            % Squeeze to eliminate redundant dimensions.
-            for lv1 = 1:length(self.executables)
-                data_exec = self.execData.(self.names{lv1});
-                dataNames = fieldnames(data_exec);
-                for lv2 = 1:numel(dataNames)
-                    data_exec.(dataNames{lv2}) = squeeze(data_exec.(dataNames{lv2}));
-                end
-                self.execData.(self.names{lv1}) = data_exec;
-            end
+            self.squeezeData()
+            
+            % Return the executables data
             data = self.execData;
             
             % Close waitbar
@@ -189,30 +209,54 @@ classdef DiscreteSimulation < handle
     end
     
     methods (Access = private)
-        function data = appendSimData(~,t,data_k,data)
-            % Get all the field names from the sol_data struct.
-            % TODO - inefficient, memory not preallocated.
-            % TODO - ACTUALLY DO THIS SOON. Would seriously improve speed.
+        function appendSimData(self,t,data_k,execNumber)
+            % Inserts the data of the specific time point into the 
+            execName = self.names{execNumber};
             data_k.t = t;
             dataNames_k = fieldnames(data_k);
             
-            % Each field should contain only 1 value, so loop and keep
-            % combining into a final data struct.
-            for lv2 = 1:numel(dataNames_k)
-                if isfield(data, dataNames_k{lv2})
-                    % Check if there is a field already in self.data
-                    
-                    % If a field contains a matrix, append in the
-                    % 3rd dimension. Generalized to N dimensions.
-                    N = ndims(data_k.(dataNames_k{lv2}));
-                    data.(dataNames_k{lv2}) = cat(N + 1, data.(dataNames_k{lv2}),...
-                        data_k.(dataNames_k{lv2}));
-                else
-                    % Otherwise create the field.
-                    data.(dataNames_k{lv2}) = [data_k.(dataNames_k{lv2})];
+            if ~isfield(self.execData, execName) 
+                % Preallocate data storage arrays
+                % Total number of data points we will get.
+                N = (self.timeSpan(end) - self.timeSpan(1))*self.frequencies(execNumber) + 1;
+                for lv1 = 1:length(dataNames_k)
+                    % Get size of single data value.
+                    sz = size(data_k.(dataNames_k{lv1}));
+
+                    % Create array, augmenting by a single dimension with N
+                    % time points.
+                    self.execData.(execName).(dataNames_k{lv1}) = zeros([sz, N]);
                 end
             end
             
+            % Data has already been preallocated
+            indx = round((t - self.timeSpan(1))*self.frequencies(execNumber)) + 1;
+            S.type = '()';
+            for lv1 = 1:length(dataNames_k)
+                n = ndims(data_k.(dataNames_k{lv1}));
+                c = cell(1,n);
+                c(:) = {':'};
+                S.subs = [c,indx];
+                
+                % subsasgn is a special function to dynamically index into
+                % a variable with unknown variable name.
+                self.execData.(execName).(dataNames_k{lv1}) = subsasgn(self.execData.(execName).(dataNames_k{lv1}),S,data_k.(dataNames_k{lv1}));
+            end
+            
+        end
+        
+        function squeezeData(self)
+            % Squeeze to eliminate redundant dimensions.
+            for lv1 = 1:length(self.executables)
+                if isfield(self.execData,self.names{lv1})
+                    data_exec = self.execData.(self.names{lv1});
+                    dataNames = fieldnames(data_exec);
+                    for lv2 = 1:numel(dataNames)
+                        data_exec.(dataNames{lv2}) = squeeze(data_exec.(dataNames{lv2}));
+                    end
+                    self.execData.(self.names{lv1}) = data_exec;
+                end
+            end
         end
         function createListeners(self)
             % Run the createListeners method of all classes.
@@ -248,7 +292,7 @@ classdef DiscreteSimulation < handle
                 self.executables = [self.executables; {@node.update}];
                 self.frequencies = [self.frequencies; self.nodeFrequencies.(nodeNames{lv1})];
                 self.names = [self.names; [nodeName,'_',execName]];
-                self.execData.([nodeName,'_',execName]) = struct();
+
                 % Add any other user-specifed executables.
                 % TODO - add user error checking
                 if ismethod(self.nodes.(nodeName),'createExecutables')
@@ -262,9 +306,28 @@ classdef DiscreteSimulation < handle
                         self.executables = [self.executables; {exec}];
                         self.frequencies = [self.frequencies; freq];
                         self.names = [self.names; [nodeName,'_',execName]];
-                        self.execData.([nodeName,'_',execName]) = struct();
                     end
                 end
+            end
+        end
+        
+        function TransferData(self,transferors)
+            % A function to transfer data between nodes. 
+            % Takes as input a cell of structs, where each object has the
+            % following 4 properties:
+            %   1) eventNode: Node to transfer data from.
+            %   2) eventArg: Property containing the data in source node.
+            %   3) listeningNode: Node to receive data.
+            %   4) listeningArg: Property to receive data in sink node.
+            % TODO: 1) Share timestamps.
+            for lv1 = 1:1:length(transferors)
+                iter = transferors{lv1};
+                eventNode     = iter.eventNode;
+                eventArg      = iter.eventArg;
+                listeningNode = iter.listeningNode;
+                listeningArg  = iter.listeningArg;
+                self.nodes.(listeningNode).(listeningArg) = ...
+                    self.nodes.(eventNode).(eventArg);
             end
         end
             
