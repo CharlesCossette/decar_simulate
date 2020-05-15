@@ -139,6 +139,8 @@ classdef DiscreteSimulation < handle
                                 % Append data
                                 self.appendSimData(t,outputIter,lv1);
                             end
+                        elseif self.numOutput(lv1) == 0
+                            exec(t);
                         end
 
                         % Update next time to run update for this node.
