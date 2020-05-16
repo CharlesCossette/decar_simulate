@@ -86,7 +86,7 @@ classdef DiscreteSimulation < handle
             % Run all executables once to initialize everything.
             % Check and record if the function has an output.
             self.hasOutput = false(length(self.executables),1);
-            iterNode       = ''; 
+            currentNode       = ''; 
             for lv1 = 1:length(self.executables)
                 clear ans
                 exec = self.executables{lv1};
@@ -94,21 +94,19 @@ classdef DiscreteSimulation < handle
                 % Run transferor
                 % First, check if any other nodes have been updated since
                 % the last time this node was updated.
-                if ~strcmp(iterNode,self.execNodes{lv1})
-                    iterNode = self.execNodes{lv1};
+                if ~strcmp(currentNode,self.execNodes{lv1})
+                    currentNode = self.execNodes{lv1};
                     % Then check if this node has a transferor.
-                    if isfield(self.nodeTransferors, iterNode)
-                        self.TransferData(self.nodeTransferors.(iterNode));
+                    if isfield(self.nodeTransferors, currentNode)
+                        % Transfer the listened data from other nodes.
+                        self.TransferData(self.nodeTransferors.(currentNode));
                     end
                 end
                 
-                % Store old values of properties that are being listened to
-                % in this node. 
-                % TODO: run in separate function.
-                listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
-                for lv2 = 1:length(listenedArgs)
-                    argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
-                    oldArgs.(listenedArgs{lv2}) = argVal;
+                % Store the old values of properties in this node that are
+                % being listened to by other nodes.
+                if isfield(self.timestamps, currentNode)
+                    oldArgs = self.StoreListenedArgs(lv1);
                 end
                 
                 % Execute the executable.
@@ -119,23 +117,14 @@ classdef DiscreteSimulation < handle
                 
                 % Check if the listened arguments have changed, and
                 % consequently update the timestamp.
-                % TODO: 1) It could be possible that the argument has been  
-                %          updated but the value hasn't changed, and this 
-                %          approach will not output the new timestamp. 
-                %       2) Run in separate function.
-                for lv2 = 1:length(listenedArgs)
-                    argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
-                    if argVal ~= oldArgs.(listenedArgs{lv2})
-                        eventNode = self.execNodes{lv1};
-                        eventArg  = listenedArgs{lv2};
-                        self.timestamps.(eventNode).(eventArg) = t;
-                    end
+                if isfield(self.timestamps, currentNode)
+                    self.CompareListenedArgs(oldArgs, lv1, t)
                 end
             end
             
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
             tOld     = 0;
-            iterNode = ''; 
+            currentNode = ''; 
             while t <= tEnd
                 
                 % Check if it is time to update each node.
@@ -152,23 +141,21 @@ classdef DiscreteSimulation < handle
                         % Run transferor
                         % First, check if any other nodes have been updated since
                         % the last time this node was updated.
-                        if ~strcmp(iterNode,self.execNodes{lv1})
-                            iterNode = self.execNodes{lv1};
+                        if ~strcmp(currentNode,self.execNodes{lv1})
+                            currentNode = self.execNodes{lv1};
                             % Then check if this node has a transferor.
-                            if isfield(self.nodeTransferors, iterNode)
-                                self.TransferData(self.nodeTransferors.(iterNode));
+                            if isfield(self.nodeTransferors, currentNode)
+                                % Transfer the listened data from other nodes.
+                                self.TransferData(self.nodeTransferors.(currentNode));
                             end
                         end
                         
-                        % Store old values of properties that are being listened to
-                        % in this node. 
-                        % TODO: Run in separate function.
-                        listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
-                        for lv2 = 1:length(listenedArgs)
-                            argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
-                            oldArgs.(listenedArgs{lv2}) = argVal;
+                        % Store the old values of properties in this node that are
+                        % being listened to by other nodes.
+                        if isfield(self.timestamps, currentNode)
+                            oldArgs = self.StoreListenedArgs(lv1);
                         end
-                        
+
                         % Check number of outputs of the executable.
                         if self.hasOutput(lv1)
                             % Run executable
@@ -181,17 +168,8 @@ classdef DiscreteSimulation < handle
                         
                         % Check if the listened arguments have changed, and
                         % consequently update the timestamp.
-                        % TODO: 1) It could be possible that the argument has been  
-                        %          updated but the value hasn't changed, and this 
-                        %          approach will not output the new timestamp. 
-                        %       2) Run in separate function.
-                        for lv2 = 1:length(listenedArgs)
-                            argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
-                            if argVal ~= oldArgs.(listenedArgs{lv2})
-                                eventNode = self.execNodes{lv1};
-                                eventArg  = listenedArgs{lv2};
-                                self.timestamps.(eventNode).(eventArg) = t;
-                            end
+                        if isfield(self.timestamps, currentNode)
+                            self.CompareListenedArgs(oldArgs, lv1, t)
                         end
 
                         % Update next time to run update for this node.
@@ -422,6 +400,34 @@ classdef DiscreteSimulation < handle
                     self.nodes.(eventNode).(eventArg);
             end
         end
+        
+        function oldArgs = StoreListenedArgs(self,lv1)
+            % Store old values of properties that are being listened to
+            % in this node. 
+            listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
+            for lv2 = 1:length(listenedArgs)
+                argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
+                oldArgs.(listenedArgs{lv2}) = argVal;
+            end
+        end
+        
+        function CompareListenedArgs(self, oldArgs, lv1, t)
+            % Check if the listened arguments have changed, and
+            % consequently update the timestamp.
+            % TODO: 1) It could be possible that the argument has been  
+            %          updated but the value hasn't changed, and this 
+            %          approach will not output the new timestamp. 
+            listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
+            for lv2 = 1:length(listenedArgs)
+                argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
+                if argVal ~= oldArgs.(listenedArgs{lv2})
+                    eventNode = self.execNodes{lv1};
+                    eventArg  = listenedArgs{lv2};
+                    self.timestamps.(eventNode).(eventArg) = t;
+                end
+            end
+        end
+                
             
     end
 end
