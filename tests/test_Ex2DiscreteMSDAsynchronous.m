@@ -47,18 +47,20 @@ for lv1 = 1:N
 
 end
 
-% Run using custom framework, controller at 50 Hz, dynamics at 100 Hz
+% Run using custom framework, controller at 1 Hz, dynamics at 10 Hz
 sim = DiscreteSimulation();
 sim.timeSpan = tSpan;
 cont = ControllerNodeDiscreteMSD();
 cont.k_p = params.k_p;
 cont.k_d = params.k_d;
+cont.frequency = contFreq;
 dyn = DynamicsNodeDiscreteMSD();
 dyn.mass = params.m;
 dyn.dampingConstant = params.c;
 dyn.springConstant = params.k;
 dyn.position = x0(1);
 dyn.velocity = x0(2);
+dyn.frequency = freq;
 % TODO: order nodes are added is important.
 sim.addNode(dyn,'dynamics',freq)
 sim.addNode(cont,'controller',contFreq)

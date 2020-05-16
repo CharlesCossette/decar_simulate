@@ -325,17 +325,8 @@ classdef DiscreteSimulation < handle
             self.execNodes   = {};
             self.names = {};
             for lv1 = 1:length(nodeNames)
-                % Add the update(t) function of each node as an executable.
-                % TODO - we could remove the update() function altogether
-                % now seeing as its just another executable.
                 nodeName = nodeNames{lv1};
-                node = self.nodes.(nodeName);
-                execName = 'update';
-                self.executables = [self.executables; {@node.update}];
-                self.frequencies = [self.frequencies; self.nodeFrequencies.(nodeNames{lv1})];
-                self.execNodes   = [self.execNodes; {nodeName}];
-                self.names = [self.names; [nodeName,'_',execName]];
-
+                
                 % Add any other user-specifed executables.
                 % TODO - add user error checking
                 if ismethod(self.nodes.(nodeName),'createExecutables')
@@ -365,11 +356,11 @@ classdef DiscreteSimulation < handle
             %   4) listeningArg: Property to receive data in sink node.
             % TODO: 1) Share timestamps.
             for lv1 = 1:1:length(transferors)
-                iter = transferors{lv1};
-                eventNode     = iter.eventNode;
-                eventArg      = iter.eventArg;
-                listeningNode = iter.listeningNode;
-                listeningArg  = iter.listeningArg;
+                transferor = transferors{lv1};
+                eventNode     = transferor.eventNode;
+                eventArg      = transferor.eventArg;
+                listeningNode = transferor.listeningNode;
+                listeningArg  = transferor.listeningArg;
                 self.nodes.(listeningNode).(listeningArg) = ...
                     self.nodes.(eventNode).(eventArg);
             end

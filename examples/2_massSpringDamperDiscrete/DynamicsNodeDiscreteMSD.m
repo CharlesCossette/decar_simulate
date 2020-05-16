@@ -1,7 +1,8 @@
 classdef DynamicsNodeDiscreteMSD < handle
     % DYNAMICSNODEDISCRETEMSD - Mass-spring-damper dynamics, which listens
     % to the the control effort from the controller node. 
-    properties (SetObservable)
+    properties 
+        frequency
         position
         velocity
         accel
@@ -24,6 +25,12 @@ classdef DynamicsNodeDiscreteMSD < handle
             self.velocity = 0;
             self.accel = 0;
             self.controlEffort = 0;
+            self.frequency = 200;
+        end
+        
+        function [handles, freq] = createExecutables(self)
+            handles(1) = {@self.update};
+            freq(1) = self.frequency;
         end
         
         function data = update(self, t)

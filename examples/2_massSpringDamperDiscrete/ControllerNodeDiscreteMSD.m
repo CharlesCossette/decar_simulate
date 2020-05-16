@@ -4,7 +4,8 @@ classdef ControllerNodeDiscreteMSD < handle
     % Although this seems like a lot of overhead just to comply with this
     % simulator framework, this is useful for more complicated nodes.
     
-    properties (SetObservable)
+    properties
+        frequency
         k_p
         k_d
         u
@@ -20,35 +21,30 @@ classdef ControllerNodeDiscreteMSD < handle
             self.u = 0;
             self.r = 0;
             self.v = 0;
+            self.frequency = 100;
         end
         
-        function listeners = createListeners(self,nodes)
-            % The createListeners(nodes) function is a special function
-            % that will be called at the beginning of the simulation. Use
-            % this to create listeners to other nodes. 
-            %
-            % Optionally, you can choose to return the listeners as an 
-            % argument so that the simulator can construct the
-            % interconnection graph.
+        function transferors = createTransferors(~)
+            vtransferor.eventNode = 'dynamics';
+            vtransferor.eventArg = 'velocity';
+            vtransferor.listeningNode = 'controller';
+            vtransferor.listeningArg = 'v';
             
-            % Controller node listens to position and velocity
-            listeners(1) = addlistener(nodes.dynamics,'position','PostSet',@self.cbPosition);
-            listeners(2) = addlistener(nodes.dynamics,'velocity','PostSet',@self.cbVelocity);
-        end
-
-        function cbPosition(self, src, evnt)
-            % Callback to store position.
-            self.r = evnt.AffectedObject.position;
-        end
-        function cbVelocity(self, src, evnt)
-            % Callback to store velocity.
-            self.v = evnt.AffectedObject.velocity;
+            rtransferor.eventNode = 'dynamics';
+            rtransferor.eventArg = 'position';
+            rtransferor.listeningNode = 'controller';
+            rtransferor.listeningArg = 'r';
+            
+            transferors{1} = rtransferor;
+            transferors{2} = vtransferor;
         end
         
         function [handles, freq] = createExecutables(self)
-            % TODO: remove this, create an EKF example instead
-            handles = {@self.gainSchedule};
-            freq = 0.5;
+            % TODO: remove gainSchedule, create an EKF example instead
+            handles(1) = {@self.gainSchedule};
+            freq(1) = 0.5;
+            handles(2) = {@self.update};
+            freq(2) = self.frequency;
         end
         function data = update(self,t)
             % The update method is another special method that will be
