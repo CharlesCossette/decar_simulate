@@ -23,6 +23,7 @@ classdef DiscreteSimulation < handle
         waitbarHandle
         hasOutput
         execNodes
+        timestamps
     end
     
     methods
@@ -101,9 +102,34 @@ classdef DiscreteSimulation < handle
                     end
                 end
                 
+                % Store old values of properties that are being listened to
+                % in this node. 
+                % TODO: run in separate function.
+                listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
+                for lv2 = 1:length(listenedArgs)
+                    argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
+                    oldArgs.(listenedArgs{lv2}) = argVal;
+                end
+                
+                % Execute the executable.
                 exec(t);
                 if exist('ans','var')
                     self.hasOutput(lv1) = true;
+                end
+                
+                % Check if the listened arguments have changed, and
+                % consequently update the timestamp.
+                % TODO: 1) It could be possible that the argument has been  
+                %          updated but the value hasn't changed, and this 
+                %          approach will not output the new timestamp. 
+                %       2) Run in separate function.
+                for lv2 = 1:length(listenedArgs)
+                    argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
+                    if argVal ~= oldArgs.(listenedArgs{lv2})
+                        eventNode = self.execNodes{lv1};
+                        eventArg  = listenedArgs{lv2};
+                        self.timestamps.(eventNode).(eventArg) = t;
+                    end
                 end
             end
             
@@ -134,7 +160,16 @@ classdef DiscreteSimulation < handle
                             end
                         end
                         
-                        % Check number of outputs of the executable. 
+                        % Store old values of properties that are being listened to
+                        % in this node. 
+                        % TODO: Run in separate function.
+                        listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
+                        for lv2 = 1:length(listenedArgs)
+                            argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
+                            oldArgs.(listenedArgs{lv2}) = argVal;
+                        end
+                        
+                        % Check number of outputs of the executable.
                         if self.hasOutput(lv1)
                             % Run executable
                             data_exec_k = exec(t);
@@ -142,6 +177,21 @@ classdef DiscreteSimulation < handle
                             self.appendSimData(t,data_exec_k,lv1);
                         else
                             exec(t);
+                        end
+                        
+                        % Check if the listened arguments have changed, and
+                        % consequently update the timestamp.
+                        % TODO: 1) It could be possible that the argument has been  
+                        %          updated but the value hasn't changed, and this 
+                        %          approach will not output the new timestamp. 
+                        %       2) Run in separate function.
+                        for lv2 = 1:length(listenedArgs)
+                            argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
+                            if argVal ~= oldArgs.(listenedArgs{lv2})
+                                eventNode = self.execNodes{lv1};
+                                eventArg  = listenedArgs{lv2};
+                                self.timestamps.(eventNode).(eventArg) = t;
+                            end
                         end
 
                         % Update next time to run update for this node.
@@ -295,8 +345,6 @@ classdef DiscreteSimulation < handle
         
         function createTransferors(self)
             % Run the createTransferors method of all classes.
-            % TODO: 1) Update the interconnection graph to include
-            %          transferors.
             self.nodeTransferors = struct();
             nodeNames = fieldnames(self.nodes);
             for lv1 = 1:length(nodeNames)
@@ -304,6 +352,22 @@ classdef DiscreteSimulation < handle
                 if ismethod(self.nodes.(nodeName),'createTransferors')
                     transferors = self.nodes.(nodeName).createTransferors();
                     self.nodeTransferors.(nodeName) = transferors; 
+                end
+            end
+            
+            % Create a structure to keep track of the timesteps of the 
+            % eventArgs in all transferors. The timesteps represent the last
+            % time the eventArg was updated.
+            self.timestamps = struct();
+            for lv1 = 1:length(nodeNames)
+                nodeName = nodeNames{lv1};
+                if ismethod(self.nodes.(nodeName),'createTransferors')
+                    transferor = self.nodeTransferors.(nodeName);
+                    for lv2 = 1:length(transferor)
+                        eventNode = transferor{lv2}.eventNode;
+                        eventArg  = transferor{lv2}.eventArg;
+                        self.timestamps.(eventNode).(eventArg) = -1;
+                    end
                 end
             end
         end
