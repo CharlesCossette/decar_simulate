@@ -11,7 +11,6 @@ classdef DiscreteSimulation < handle
     
     properties
         nodes
-        nodeFrequencies % This will eventually get removed
         nodeListeners % To be replaced
         nodeTransferors
         timeSpan
@@ -32,7 +31,7 @@ classdef DiscreteSimulation < handle
             self.timeSpan = [0 10];
         end
         
-        function addNode(self, node, nodeName, nodeFreq)
+        function addNode(self, node, nodeName)
             % Add node to list of nodes.
             % Inputs:
             % --------
@@ -42,13 +41,8 @@ classdef DiscreteSimulation < handle
             % nodeName: string
             %       specific name to call that node, can be different
             %       from the class name.
-            %
-            % nodeFreq: int
-            %       node frequency in Hz. Can be different from all
-            %       the other nodes.
             
             self.nodes.(nodeName) = node;
-            self.nodeFrequencies.(nodeName) = nodeFreq;
         end
         
         function data = run(self)
@@ -76,7 +70,6 @@ classdef DiscreteSimulation < handle
             self.createExecutables()            
             
             % Get node frequencies
-            % store in a matrix instead of struct.
             nodeFreq = self.frequencies;
             
             % Start and end times

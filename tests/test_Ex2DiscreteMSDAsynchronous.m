@@ -62,8 +62,8 @@ dyn.position = x0(1);
 dyn.velocity = x0(2);
 dyn.frequency = freq;
 % TODO: order nodes are added is important.
-sim.addNode(dyn,'dynamics',freq)
-sim.addNode(cont,'controller',contFreq)
+sim.addNode(dyn,'dynamics')
+sim.addNode(cont,'controller')
 data = sim.run();
 
 % Plot as visual check - position
