@@ -12,6 +12,10 @@ classdef DynamicsNodeDiscreteMSD < handle
         springConstant
         dampingConstant
         tOld
+        
+        timestamps % if this property exists in a node, then the timestep 
+                   % at which every transferor listeningArg (controlEffort 
+                   % in this case) is updated is recorded.
     end
         
     

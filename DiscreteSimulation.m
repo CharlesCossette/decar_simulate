@@ -1,5 +1,5 @@
 classdef DiscreteSimulation < handle
-    %DISCRETESIMULATION class for running multiple nodes in parallel, at
+    % DISCRETESIMULATION class for running multiple nodes in parallel, at
     % different frequencies. When you run a simulation with this class, it
     %
     % 1) Checks to see what node needs to be updated next, and then
@@ -334,17 +334,24 @@ classdef DiscreteSimulation < handle
             end
             
             % Create a structure to keep track of the timesteps of the 
-            % eventArgs in all transferors. The timesteps represent the last
-            % time the eventArg was updated.
+            % eventArgs in transferors where the listeningNode has a 
+            % timesteps property. The timesteps represent the last time
+            % the eventArg was updated.
             self.timestamps = struct();
             for lv1 = 1:length(nodeNames)
                 nodeName = nodeNames{lv1};
-                if ismethod(self.nodes.(nodeName),'createTransferors')
+                hasTransferorAndtimestamp = ...
+                            ismethod(self.nodes.(nodeName),'createTransferors')...
+                            && isprop(self.nodes.(nodeName), 'timestamps');
+                if hasTransferorAndtimestamp
                     transferor = self.nodeTransferors.(nodeName);
+                    self.nodes.(nodeName).timestamps = struct();
                     for lv2 = 1:length(transferor)
-                        eventNode = transferor{lv2}.eventNode;
-                        eventArg  = transferor{lv2}.eventArg;
+                        eventNode    = transferor{lv2}.eventNode;
+                        eventArg     = transferor{lv2}.eventArg;
+                        listeningArg = transferor{lv2}.listeningArg;
                         self.timestamps.(eventNode).(eventArg) = -1;
+                        self.nodes.(nodeName).timestamps.(listeningArg) = -1;
                     end
                 end
             end
@@ -398,6 +405,12 @@ classdef DiscreteSimulation < handle
                 listeningArg  = transferor.listeningArg;
                 self.nodes.(listeningNode).(listeningArg) = ...
                     self.nodes.(eventNode).(eventArg);
+                
+                % Update timestamp if it exists in the listening node.
+                if isprop(self.nodes.(listeningNode), 'timestamps')
+                    self.nodes.(listeningNode).timestamps.(listeningArg) = ...
+                        self.timestamps.(eventNode).(eventArg);
+                end
             end
         end
         
