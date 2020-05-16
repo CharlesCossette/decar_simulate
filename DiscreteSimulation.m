@@ -11,7 +11,6 @@ classdef DiscreteSimulation < handle
     
     properties
         nodes
-        nodeListeners % To be replaced
         nodeTransferors
         timeSpan
         executables
@@ -60,10 +59,7 @@ classdef DiscreteSimulation < handle
             
             % Create waitbar
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
-            
-            % Create listeners
-            self.createListeners()
-            
+          
             % Create transferors
             self.createTransferors()
             
@@ -202,34 +198,12 @@ classdef DiscreteSimulation < handle
         end
         
         function showGraph(self)
-            if isempty(self.nodeListeners)
-                self.createListeners();
-            end
             if isempty(self.nodeTransferors)
                 self.createTransferors();
             end
             edgeTable = table([  ],[],'VariableNames',{'EndNodes' 'Label'});
             nodeNames = fieldnames(self.nodes);
-            
-            % Listeners
-            % Go through all the nodes
-            for lv1 = 1:numel(nodeNames)
-                listeners = self.nodeListeners.(nodeNames{lv1});
-                % Go through all the listeners to that node
-                for lv2 = 1:numel(listeners)
-                    L = listeners(lv2);
-                    % Go through all the nodes again to find out which node
-                    % it is listening to
-                    for lv3 = 1:numel(nodeNames)
-                        obj = L.Object{:};
-                        if obj == self.nodes.(nodeNames{lv3})
-                            edgeTable = [edgeTable; {{nodeNames{lv3},nodeNames{lv1}},L.Source{:}.Name}];
-                        end
-                    end
-                    
-                end
-            end
-            
+                       
             % Transferors
             for lv1 = 1:numel(nodeNames)
                 if isfield(self.nodeTransferors, nodeNames{lv1})
@@ -302,21 +276,6 @@ classdef DiscreteSimulation < handle
                         data_exec.(dataNames{lv2}) = squeeze(data_exec.(dataNames{lv2}));
                     end
                     self.execData.(self.names{lv1}) = data_exec;
-                end
-            end
-        end
-        function createListeners(self)
-            % Run the createListeners method of all classes.
-            % If an output argument is returned, store it to create the
-            % interconnection graph.
-            nodeNames = fieldnames(self.nodes);
-            self.nodeListeners = struct();
-            for lv1 = 1:length(nodeNames)
-                try
-                    varargout = self.nodes.(nodeNames{lv1}).createListeners(self.nodes);
-                    self.nodeListeners.(nodeNames{lv1}) = varargout;
-                catch
-                    self.nodeListeners.(nodeNames{lv1}) = [];
                 end
             end
         end
