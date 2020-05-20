@@ -5,7 +5,7 @@
 
 % Create discrete time simulation object
 sim = DiscreteSimulation();
-sim.timeSpan = [0, 10];
+sim.timeSpan = [0, 100];
 
 % Add controller node, arbitrarily named 'controller'.
 sim.addNode(ControllerNodeDiscreteMSD(),'controller')

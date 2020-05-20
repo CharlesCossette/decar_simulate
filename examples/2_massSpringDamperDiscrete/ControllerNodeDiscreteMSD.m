@@ -21,6 +21,7 @@ classdef ControllerNodeDiscreteMSD < handle
             self.u = 0;
             self.r = 0;
             self.v.value = 0;
+            self.v.t = 0;
             self.frequency = 100;
         end
         
@@ -34,10 +35,12 @@ classdef ControllerNodeDiscreteMSD < handle
         end
         
         function subscribers = createSubscribers(~)
+            % Subscribe to the 'dyn_position' topic
             sub1.topic = 'dyn_position';
             sub1.destination = 'r';
             %sub1.callback = @self.someCallback % Could even have callbacks
             
+            % Subscribe to the 'dyn_velocity' topic WITH TIMESTAMPS.
             sub2.topic = 'dyn_velocity';
             sub2.destination = 'v';
             sub2.timestamps = true;
@@ -69,7 +72,7 @@ classdef ControllerNodeDiscreteMSD < handle
             % must specifically access the "value" field. Otherwise the
             % value can be put directly into self.v
             vel = self.v.value;
-            %vel_timestamp = self.v.t; % How to access the timestamp.
+            vel_timestamp = self.v.t; % How to access the timestamp.
             
             % PD control with [0;0] setpoint.
             self.u = self.k_p*(0 - self.r) + self.k_d*(0 - vel);

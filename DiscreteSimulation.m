@@ -11,8 +11,6 @@ classdef DiscreteSimulation < handle
     
     properties
         nodes
-        nodeTransferors
-        nodeSubscribers
         timeSpan
         executables
         subscribers
@@ -62,7 +60,7 @@ classdef DiscreteSimulation < handle
             % Create waitbar
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
             
-            % Create transferors
+            % Create subscribers
             self.createSubscribers()
             
             % Create executables (all asynchronous functions)
@@ -75,7 +73,7 @@ classdef DiscreteSimulation < handle
             tStart = self.timeSpan(1);
             tEnd = self.timeSpan(end);
             
-            % Column matrix stores the next time that node should be
+            % Column matrix stores the next time that executable should be
             % updated. Initialize all to tStart
             nodeNextUpdateTimes = tStart*ones(length(nodeFreq),1);
             t = tStart;
@@ -99,8 +97,7 @@ classdef DiscreteSimulation < handle
             end
             
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
-            tOld     = 0;
-            currentNode = '';
+            tOld = 0;
             while t <= tEnd
                 
                 % Check if it is time to update each node.
@@ -116,8 +113,8 @@ classdef DiscreteSimulation < handle
                         exec = self.executables{lv1}; 
                         
                         % Check number of outputs of the executable. 
-                        % If 2 outputs, then post-processing data and a
-                        % publisher are to be addressed.
+                        % If 2 outputs, then post-processing data and 
+                        % publishers are to be addressed.
                         % If 1 output, then check which one is it.
                         if self.numOutput(lv1) == 2
                             % Run executable
@@ -143,6 +140,7 @@ classdef DiscreteSimulation < handle
                         elseif self.numOutput(lv1) == 0
                             exec(t);
                         end
+                        
                         % Update next time to run update for this node.
                         nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
                     end
@@ -173,6 +171,7 @@ classdef DiscreteSimulation < handle
         end
         
         function showGraph(self)
+            % TODO: this doesnt work right now
             if isempty(self.nodeTransferors)
                 self.createTransferors();
             end
@@ -332,6 +331,7 @@ classdef DiscreteSimulation < handle
         
         function sendToSubscribers(self,publishers,t)
             
+            % Topics of each subscriber.
             topicList = {self.subscribers(:).topic};
             for lv1 = 1:length(publishers)
                 topic = publishers(lv1).topic;
@@ -353,65 +353,5 @@ classdef DiscreteSimulation < handle
                 end
             end
         end
-        
-        
-        function TransferData(self,transferors)
-            % A function to transfer data between nodes.
-            % Takes as input a cell of structs, where each object has the
-            % following 4 properties:
-            %   1) eventNode: Node to transfer data from.
-            %   2) eventArg: Property containing the data in source node.
-            %   3) listeningNode: Node to receive data.
-            %   4) listeningArg: Property to receive data in sink node.
-            % TODO: 1) Share timestamps.
-            for lv1 = 1:1:length(transferors)
-                transferor = transferors{lv1};
-                eventNode     = transferor.eventNode;
-                eventArg      = transferor.eventArg;
-                listeningNode = transferor.listeningNode;
-                listeningArg  = transferor.listeningArg;
-                self.nodes.(listeningNode).(listeningArg) = ...
-                    self.nodes.(eventNode).(eventArg);
-                
-                % Update timestamp if it exists in the listening node.
-                if isprop(self.nodes.(listeningNode), 'timestamps')
-                    self.nodes.(listeningNode).timestamps.(listeningArg) = ...
-                        self.timestamps.(eventNode).(eventArg);
-                end
-            end
-        end
-        
-        function oldArgs = StoreListenedArgs(self,lv1)
-            % Store old values of properties that are being listened to
-            % in this node.
-            listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
-            for lv2 = 1:length(listenedArgs)
-                argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
-                oldArgs.(listenedArgs{lv2}) = argVal;
-            end
-        end
-        
-        function CompareListenedArgs(self, oldArgs, lv1, t)
-            % Check if the listened arguments have changed, and
-            % consequently update the timestamp.
-            % TODO: 1) It could be possible that the argument has been
-            %          updated but the value hasn't changed, and this
-            %          approach will not output the new timestamp.
-            listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
-            for lv2 = 1:length(listenedArgs)
-                argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
-                if ~all(size(argVal) == size(oldArgs.(listenedArgs{lv2})))
-                    eventNode = self.execNodes{lv1};
-                    eventArg  = listenedArgs{lv2};
-                    self.timestamps.(eventNode).(eventArg) = t;
-                elseif argVal ~= oldArgs.(listenedArgs{lv2})
-                    eventNode = self.execNodes{lv1};
-                    eventArg  = listenedArgs{lv2};
-                    self.timestamps.(eventNode).(eventArg) = t;
-                end
-            end
-        end
-        
-        
     end
 end
