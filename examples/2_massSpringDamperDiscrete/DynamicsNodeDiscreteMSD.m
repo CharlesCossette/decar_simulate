@@ -37,7 +37,7 @@ classdef DynamicsNodeDiscreteMSD < handle
             freq(1) = self.frequency;
         end
         
-        function data = update(self, t)
+        function [data, publishers] = update(self, t)
             % The update() function is called automatically by the
             % simulator at the user-specified frequency. Do whatever you
             % want with this. The simulator time t is passed for reference.
@@ -57,9 +57,16 @@ classdef DynamicsNodeDiscreteMSD < handle
             self.velocity = self.velocity + dt*a;
             self.tOld = t; % Dont forget this!!
             
+            % Export data
             data.r = self.position;
             data.v = self.velocity;
             data.a = a;
+            
+            % Publish data
+            publishers(1).topic = 'dyn_position';
+            publishers(1).value = self.position;
+            publishers(2).topic = 'dyn_velocity';
+            publishers(2).value = self.velocity;
             
         end
         
@@ -82,22 +89,13 @@ classdef DynamicsNodeDiscreteMSD < handle
     end
     
     methods (Static)
-        function transferors = createTransferors()
-            % The createTransferors() function is a special function that
-            % will be called at the beginning of the simulation. Use this
-            % to create listeners to other nodes. 
+        function subscribers = createSubscribers()
+            % Provides a change of subscribers, which each have a topic and
+            % where to copy the value - i.e. the destination.
+            sub1.topic = 'cont_controlEffort';
+            sub1.destination = 'controlEffort';
             
-            % Dynamics node listens to control effort.
-            % Set up a transferor that takes the u property from the 
-            % controller node and updates the controlEffort property of the 
-            % dynamics node. These are the 4 properties all transferors 
-            % should have:
-            uTransferor.eventNode     = 'controller';
-            uTransferor.eventArg      = 'u';
-            uTransferor.listeningNode = 'dynamics';
-            uTransferor.listeningArg  = 'controlEffort'; 
-            
-            transferors{1} = uTransferor;
+            subscribers{1} = sub1;
         end
     end
 end

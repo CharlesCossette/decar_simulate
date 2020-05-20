@@ -12,15 +12,17 @@ classdef DiscreteSimulation < handle
     properties
         nodes
         nodeTransferors
+        nodeSubscribers
         timeSpan
         executables
+        subscribers
         frequencies
         names
         execData
     end
     properties (Access = private)
         waitbarHandle
-        hasOutput
+        numOutput
         execNodes
         timestamps
     end
@@ -61,7 +63,7 @@ classdef DiscreteSimulation < handle
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
             
             % Create transferors
-            self.createTransferors()
+            self.createSubscribers()
             
             % Create executables (all asynchronous functions)
             self.createExecutables()
@@ -80,41 +82,19 @@ classdef DiscreteSimulation < handle
             
             
             % Run all executables once to initialize everything.
-            % Check and record if the function has an output.
-            self.hasOutput = false(length(self.executables),1);
-            currentNode       = '';
+            % Check and record how many variables does the function output.
+            self.numOutput = zeros(length(self.executables),1);
             for lv1 = 1:length(self.executables)
                 clear ans
                 exec = self.executables{lv1};
-                
-                % Run transferor
-                % First, check if any other nodes have been updated since
-                % the last time this node was updated.
-                if ~strcmp(currentNode,self.execNodes{lv1})
-                    currentNode = self.execNodes{lv1};
-                    % Then check if this node has a transferor.
-                    if isfield(self.nodeTransferors, currentNode)
-                        % Transfer the listened data from other nodes.
-                        self.TransferData(self.nodeTransferors.(currentNode));
-                    end
-                end
-                
-                % Store the old values of properties in this node that are
-                % being listened to by other nodes.
-                if isfield(self.timestamps, currentNode)
-                    oldArgs = self.StoreListenedArgs(lv1);
-                end
-                
-                % Execute the executable.
                 exec(t);
                 if exist('ans','var')
-                    self.hasOutput(lv1) = true;
-                end
-                
-                % Check if the listened arguments have changed, and
-                % consequently update the timestamp.
-                if isfield(self.timestamps, currentNode)
-                    self.CompareListenedArgs(oldArgs, lv1, t)
+                    try 
+                        [~,~] = exec(t);
+                        self.numOutput(lv1) = 2;
+                    catch
+                        self.numOutput(lv1) = 1;
+                    end
                 end
             end
             
@@ -131,43 +111,38 @@ classdef DiscreteSimulation < handle
                 %          simulations.
                 for lv1 = 1:length(nodeNextUpdateTimes)
                     if abs(t - nodeNextUpdateTimes(lv1)) < 1e-9
-                        % Update node state
-                        exec = self.executables{lv1};
+                                                
+                        % Extract executable function handle
+                        exec = self.executables{lv1}; 
                         
-                        % Run transferor
-                        % First, check if any other nodes have been updated since
-                        % the last time this node was updated.
-                        if ~strcmp(currentNode,self.execNodes{lv1})
-                            currentNode = self.execNodes{lv1};
-                            % Then check if this node has a transferor.
-                            if isfield(self.nodeTransferors, currentNode)
-                                % Transfer the listened data from other nodes.
-                                self.TransferData(self.nodeTransferors.(currentNode));
-                            end
-                        end
-                        
-                        % Store the old values of properties in this node that are
-                        % being listened to by other nodes.
-                        if isfield(self.timestamps, currentNode)
-                            oldArgs = self.StoreListenedArgs(lv1);
-                        end
-                        
-                        % Check number of outputs of the executable.
-                        if self.hasOutput(lv1)
+                        % Check number of outputs of the executable. 
+                        % If 2 outputs, then post-processing data and a
+                        % publisher are to be addressed.
+                        % If 1 output, then check which one is it.
+                        if self.numOutput(lv1) == 2
                             % Run executable
-                            data_exec_k = exec(t);
+                            [data_exec_k, publishers] = exec(t);
+
                             % Append data
-                            self.appendSimData(t,data_exec_k,lv1);
-                        else
+                            self.appendSimData(t,data_exec_k, lv1);
+                            
+                            % Transfer data
+                            self.sendToSubscribers(publishers,t);
+                            
+                        elseif self.numOutput(lv1) == 1
+                            outputIter = exec(t);
+                            % check if output is postprocessing data or a
+                            % publisher
+                            if isfield(outputIter,'topic') && isfield(outputIter,'value')
+                                % Transfer data
+                                self.sendToSubscribers(outputIter,t)
+                            else                  % then, outputIter = data_exec_k.
+                                % Append data
+                                self.appendSimData(t,outputIter,lv1);
+                            end
+                        elseif self.numOutput(lv1) == 0
                             exec(t);
                         end
-                        
-                        % Check if the listened arguments have changed, and
-                        % consequently update the timestamp.
-                        if isfield(self.timestamps, currentNode)
-                            self.CompareListenedArgs(oldArgs, lv1, t)
-                        end
-                        
                         % Update next time to run update for this node.
                         nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
                     end
@@ -289,38 +264,37 @@ classdef DiscreteSimulation < handle
             end
         end
         
-        function createTransferors(self)
-            % Run the createTransferors method of all classes.
-            self.nodeTransferors = struct();
+        function createSubscribers(self)
+            % Run the createSubcribers method of all classes.
+            self.subscribers = struct();
             nodeNames = fieldnames(self.nodes);
-            for lv1 = 1:length(nodeNames)
-                nodeName = nodeNames{lv1};
-                if ismethod(self.nodes.(nodeName),'createTransferors')
-                    transferors = self.nodes.(nodeName).createTransferors();
-                    self.nodeTransferors.(nodeName) = transferors;
-                end
-            end
+            counter = 1;
             
-            % Create a structure to keep track of the timesteps of the
-            % eventArgs in transferors where the listeningNode has a
-            % timesteps property. The timesteps represent the last time
-            % the eventArg was updated.
-            self.timestamps = struct();
+            % Go through each node and run createSubscribers()
             for lv1 = 1:length(nodeNames)
                 nodeName = nodeNames{lv1};
-                hasTransferorAndtimestamp = ...
-                    ismethod(self.nodes.(nodeName),'createTransferors')...
-                    && isprop(self.nodes.(nodeName), 'timestamps');
-                if hasTransferorAndtimestamp
-                    transferor = self.nodeTransferors.(nodeName);
-                    self.nodes.(nodeName).timestamps = struct();
-                    for lv2 = 1:length(transferor)
-                        eventNode    = transferor{lv2}.eventNode;
-                        eventArg     = transferor{lv2}.eventArg;
-                        listeningArg = transferor{lv2}.listeningArg;
-                        self.timestamps.(eventNode).(eventArg) = -1;
-                        self.nodes.(nodeName).timestamps.(listeningArg) = -1;
+                if ismethod(self.nodes.(nodeName),'createSubscribers')
+                    nodeSubs = self.nodes.(nodeName).createSubscribers();
+                    
+                    % Loop through all subscribers returned.
+                    for lv2 = 1:length(nodeSubs)
+                        sub = nodeSubs{lv2};
+                        self.subscribers(counter).topic = sub.topic;
+                        self.subscribers(counter).destination = sub.destination;
+                        self.subscribers(counter).node = nodeName;
+                        
+                        % Optional parameter - timestamps.
+                        if isfield(sub,'timestamps')
+                            self.subscribers(counter).timestamps = sub.timestamps;
+                        else
+                            self.subscribers(counter).timestamps = false;
+                        end
+                        
+                        % Optional parameter - callbacks.
+                        % TODO: can add callback option here.
+                        counter = counter + 1;
                     end
+                        
                 end
             end
         end
@@ -355,6 +329,31 @@ classdef DiscreteSimulation < handle
                 end
             end
         end
+        
+        function sendToSubscribers(self,publishers,t)
+            
+            topicList = {self.subscribers(:).topic};
+            for lv1 = 1:length(publishers)
+                topic = publishers(lv1).topic;
+                
+                % Get only the subscribers that are subscribed to this
+                % topic.
+                isSubscribed = ismember(topicList,topic);
+                subs = self.subscribers(isSubscribed);
+                for lv2 = 1:length(subs)
+                    if subs(lv2).timestamps
+                        self.nodes.(subs(lv2).node).(subs(lv2).destination) = struct();
+                        self.nodes.(subs(lv2).node).(subs(lv2).destination).value = ...
+                            publishers(lv1).value;
+                        self.nodes.(subs(lv2).node).(subs(lv2).destination).t = t;
+                    else
+                        self.nodes.(subs(lv2).node).(subs(lv2).destination) = ...
+                            publishers(lv1).value;
+                    end
+                end
+            end
+        end
+        
         
         function TransferData(self,transferors)
             % A function to transfer data between nodes.
