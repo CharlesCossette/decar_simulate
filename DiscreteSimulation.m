@@ -405,7 +405,7 @@ classdef DiscreteSimulation < handle
                     eventNode = self.execNodes{lv1};
                     eventArg  = listenedArgs{lv2};
                     self.timestamps.(eventNode).(eventArg) = t;
-                elseif argVal ~= oldArgs.(listenedArgs{lv2})
+                elseif any(argVal ~= oldArgs.(listenedArgs{lv2}))
                     eventNode = self.execNodes{lv1};
                     eventArg  = listenedArgs{lv2};
                     self.timestamps.(eventNode).(eventArg) = t;
