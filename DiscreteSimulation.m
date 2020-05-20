@@ -59,12 +59,12 @@ classdef DiscreteSimulation < handle
             
             % Create waitbar
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
-          
+            
             % Create transferors
             self.createTransferors()
             
             % Create executables (all asynchronous functions)
-            self.createExecutables()            
+            self.createExecutables()
             
             % Get node frequencies
             nodeFreq = self.frequencies;
@@ -82,7 +82,7 @@ classdef DiscreteSimulation < handle
             % Run all executables once to initialize everything.
             % Check and record if the function has an output.
             self.hasOutput = false(length(self.executables),1);
-            currentNode       = ''; 
+            currentNode       = '';
             for lv1 = 1:length(self.executables)
                 clear ans
                 exec = self.executables{lv1};
@@ -120,19 +120,19 @@ classdef DiscreteSimulation < handle
             
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
             tOld     = 0;
-            currentNode = ''; 
+            currentNode = '';
             while t <= tEnd
                 
                 % Check if it is time to update each node.
                 % Note: a small tolerance of 1e-9 is used due to
                 % accumulating rounding errors.
-                % TODO: 1) Find a way to deal with the rounding errors, 
-                %          as they will become even larger with longer 
+                % TODO: 1) Find a way to deal with the rounding errors,
+                %          as they will become even larger with longer
                 %          simulations.
                 for lv1 = 1:length(nodeNextUpdateTimes)
-                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-9 
+                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-9
                         % Update node state
-                        exec = self.executables{lv1};                        
+                        exec = self.executables{lv1};
                         
                         % Run transferor
                         % First, check if any other nodes have been updated since
@@ -151,7 +151,7 @@ classdef DiscreteSimulation < handle
                         if isfield(self.timestamps, currentNode)
                             oldArgs = self.StoreListenedArgs(lv1);
                         end
-
+                        
                         % Check number of outputs of the executable.
                         if self.hasOutput(lv1)
                             % Run executable
@@ -167,7 +167,7 @@ classdef DiscreteSimulation < handle
                         if isfield(self.timestamps, currentNode)
                             self.CompareListenedArgs(oldArgs, lv1, t)
                         end
-
+                        
                         % Update next time to run update for this node.
                         nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
                     end
@@ -203,12 +203,12 @@ classdef DiscreteSimulation < handle
             end
             edgeTable = table([  ],[],'VariableNames',{'EndNodes' 'Label'});
             nodeNames = fieldnames(self.nodes);
-                       
+            
             % Transferors
             for lv1 = 1:numel(nodeNames)
                 if isfield(self.nodeTransferors, nodeNames{lv1})
                     transferors = self.nodeTransferors.(nodeNames{lv1});
-                    for lv2 = 1:length(transferors)  
+                    for lv2 = 1:length(transferors)
                         T = transferors{lv2};
                         edgeTable = [edgeTable; {{T.eventNode,T.listeningNode},T.eventArg}];
                     end
@@ -231,34 +231,43 @@ classdef DiscreteSimulation < handle
     
     methods (Access = private)
         function appendSimData(self,t,data_k,execNumber)
-            % Inserts the data of the specific time point into the 
+            % Inserts the data of the specific time point into the
             execName = self.names{execNumber};
             data_k.t = t;
             dataNames_k = fieldnames(data_k);
             
-            if ~isfield(self.execData, execName) 
-                % Preallocate data storage arrays
-                % Total number of data points we will get.
-                N = (self.timeSpan(end) - self.timeSpan(1))*self.frequencies(execNumber) + 1;
-                for lv1 = 1:length(dataNames_k)
+            % Initialize executable entry in data struct if it does not
+            % exist.
+            if ~isfield(self.execData, execName)
+                self.execData.(execName) = struct();
+            end
+            
+            % Total number of data points we will get.
+            N = (self.timeSpan(end) - self.timeSpan(1))*self.frequencies(execNumber) + 1;
+            for lv1 = 1:length(dataNames_k)
+                if ~isfield(self.execData.(execName),dataNames_k{lv1})
+                    % Initialize and preallocate data storage arrays if a
+                    % particular data does not yet exist in exec data
+                    % struct.
+                    
                     % Get size of single data value.
                     sz = size(data_k.(dataNames_k{lv1}));
 
                     % Create array, augmenting by a single dimension with N
                     % time points.
                     self.execData.(execName).(dataNames_k{lv1}) = zeros([sz, N]);
+
                 end
-            end
-            
-            % Data has already been preallocated
-            indx = round((t - self.timeSpan(1))*self.frequencies(execNumber)) + 1;
-            S.type = '()';
-            for lv1 = 1:length(dataNames_k)
+                
+                % Data has already been preallocated
+                indx = round((t - self.timeSpan(1))*self.frequencies(execNumber)) + 1;
+                S.type = '()';
+
                 n = ndims(data_k.(dataNames_k{lv1}));
                 c = cell(1,n);
                 c(:) = {':'};
                 S.subs = [c,indx];
-                
+
                 % subsasgn is a special function to dynamically index into
                 % a variable with unknown variable name.
                 self.execData.(execName).(dataNames_k{lv1}) = subsasgn(self.execData.(execName).(dataNames_k{lv1}),S,data_k.(dataNames_k{lv1}));
@@ -288,20 +297,20 @@ classdef DiscreteSimulation < handle
                 nodeName = nodeNames{lv1};
                 if ismethod(self.nodes.(nodeName),'createTransferors')
                     transferors = self.nodes.(nodeName).createTransferors();
-                    self.nodeTransferors.(nodeName) = transferors; 
+                    self.nodeTransferors.(nodeName) = transferors;
                 end
             end
             
-            % Create a structure to keep track of the timesteps of the 
-            % eventArgs in transferors where the listeningNode has a 
+            % Create a structure to keep track of the timesteps of the
+            % eventArgs in transferors where the listeningNode has a
             % timesteps property. The timesteps represent the last time
             % the eventArg was updated.
             self.timestamps = struct();
             for lv1 = 1:length(nodeNames)
                 nodeName = nodeNames{lv1};
                 hasTransferorAndtimestamp = ...
-                            ismethod(self.nodes.(nodeName),'createTransferors')...
-                            && isprop(self.nodes.(nodeName), 'timestamps');
+                    ismethod(self.nodes.(nodeName),'createTransferors')...
+                    && isprop(self.nodes.(nodeName), 'timestamps');
                 if hasTransferorAndtimestamp
                     transferor = self.nodeTransferors.(nodeName);
                     self.nodes.(nodeName).timestamps = struct();
@@ -348,7 +357,7 @@ classdef DiscreteSimulation < handle
         end
         
         function TransferData(self,transferors)
-            % A function to transfer data between nodes. 
+            % A function to transfer data between nodes.
             % Takes as input a cell of structs, where each object has the
             % following 4 properties:
             %   1) eventNode: Node to transfer data from.
@@ -375,7 +384,7 @@ classdef DiscreteSimulation < handle
         
         function oldArgs = StoreListenedArgs(self,lv1)
             % Store old values of properties that are being listened to
-            % in this node. 
+            % in this node.
             listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
             for lv2 = 1:length(listenedArgs)
                 argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
@@ -386,20 +395,24 @@ classdef DiscreteSimulation < handle
         function CompareListenedArgs(self, oldArgs, lv1, t)
             % Check if the listened arguments have changed, and
             % consequently update the timestamp.
-            % TODO: 1) It could be possible that the argument has been  
-            %          updated but the value hasn't changed, and this 
-            %          approach will not output the new timestamp. 
+            % TODO: 1) It could be possible that the argument has been
+            %          updated but the value hasn't changed, and this
+            %          approach will not output the new timestamp.
             listenedArgs = fieldnames(self.timestamps.(self.execNodes{lv1}));
             for lv2 = 1:length(listenedArgs)
                 argVal = self.nodes.(self.execNodes{lv1}).(listenedArgs{lv2});
-                if argVal ~= oldArgs.(listenedArgs{lv2})
+                if ~all(size(argVal) == size(oldArgs.(listenedArgs{lv2})))
+                    eventNode = self.execNodes{lv1};
+                    eventArg  = listenedArgs{lv2};
+                    self.timestamps.(eventNode).(eventArg) = t;
+                elseif argVal ~= oldArgs.(listenedArgs{lv2})
                     eventNode = self.execNodes{lv1};
                     eventArg  = listenedArgs{lv2};
                     self.timestamps.(eventNode).(eventArg) = t;
                 end
             end
         end
-                
-            
+        
+        
     end
 end
