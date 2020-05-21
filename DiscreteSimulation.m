@@ -83,15 +83,17 @@ classdef DiscreteSimulation < handle
             % Check and record how many variables does the function output.
             self.numOutput = zeros(length(self.executables),1);
             for lv1 = 1:length(self.executables)
-                clear ans
                 exec = self.executables{lv1};
-                exec(t);
-                if exist('ans','var')
-                    try 
-                        [~,~] = exec(t);
-                        self.numOutput(lv1) = 2;
-                    catch
+                try
+                    [~,~] = exec(t);
+                    self.numOutput(lv1) = 2;
+                catch
+                    try
+                        [~] = exec(t);
                         self.numOutput(lv1) = 1;
+                    catch
+                        exec(t);
+                        self.numOutput(lv1) = 0;
                     end
                 end
             end
@@ -108,18 +110,18 @@ classdef DiscreteSimulation < handle
                 %          simulations.
                 for lv1 = 1:length(nodeNextUpdateTimes)
                     if abs(t - nodeNextUpdateTimes(lv1)) < 1e-9
-                                                
-                        % Extract executable function handle
-                        exec = self.executables{lv1}; 
                         
-                        % Check number of outputs of the executable. 
-                        % If 2 outputs, then post-processing data and 
+                        % Extract executable function handle
+                        exec = self.executables{lv1};
+                        
+                        % Check number of outputs of the executable.
+                        % If 2 outputs, then post-processing data and
                         % publishers are to be addressed.
                         % If 1 output, then check which one is it.
                         if self.numOutput(lv1) == 2
                             % Run executable
                             [data_exec_k, publishers] = exec(t);
-
+                            
                             % Append data
                             self.appendSimData(t,data_exec_k, lv1);
                             
@@ -172,6 +174,9 @@ classdef DiscreteSimulation < handle
         
         function showGraph(self)
             % TODO: this doesnt work right now
+            
+            % As it stands we would need to run each exec once and go
+            % collect all the publishers.
             if isempty(self.nodeTransferors)
                 self.createTransferors();
             end
@@ -226,22 +231,22 @@ classdef DiscreteSimulation < handle
                     
                     % Get size of single data value.
                     sz = size(data_k.(dataNames_k{lv1}));
-
+                    
                     % Create array, augmenting by a single dimension with N
                     % time points.
                     self.execData.(execName).(dataNames_k{lv1}) = zeros([sz, N]);
-
+                    
                 end
                 
                 % Data has already been preallocated
                 indx = round((t - self.timeSpan(1))*self.frequencies(execNumber)) + 1;
                 S.type = '()';
-
+                
                 n = ndims(data_k.(dataNames_k{lv1}));
                 c = cell(1,n);
                 c(:) = {':'};
                 S.subs = [c,indx];
-
+                
                 % subsasgn is a special function to dynamically index into
                 % a variable with unknown variable name.
                 self.execData.(execName).(dataNames_k{lv1}) = subsasgn(self.execData.(execName).(dataNames_k{lv1}),S,data_k.(dataNames_k{lv1}));
@@ -277,14 +282,18 @@ classdef DiscreteSimulation < handle
                     
                     % Loop through all subscribers returned.
                     for lv2 = 1:length(nodeSubs)
-                        sub = nodeSubs{lv2};
+                        sub = nodeSubs(lv2);
                         self.subscribers(counter).topic = sub.topic;
                         self.subscribers(counter).destination = sub.destination;
                         self.subscribers(counter).node = nodeName;
                         
                         % Optional parameter - timestamps.
-                        if isfield(sub,'timestamps')
-                            self.subscribers(counter).timestamps = sub.timestamps;
+                        if isfield(sub,'timestamps') 
+                            if ~isempty(sub.timestamps)
+                                self.subscribers(counter).timestamps = sub.timestamps;
+                            else
+                                self.subscribers(counter).timestamps = false;
+                            end
                         else
                             self.subscribers(counter).timestamps = false;
                         end
@@ -293,7 +302,7 @@ classdef DiscreteSimulation < handle
                         % TODO: can add callback option here.
                         counter = counter + 1;
                     end
-                        
+                    
                 end
             end
         end
@@ -331,7 +340,7 @@ classdef DiscreteSimulation < handle
         
         function sendToSubscribers(self,publishers,t)
             
-            % Topics of each subscriber.
+            % Topics of all subscribesr.
             topicList = {self.subscribers(:).topic};
             for lv1 = 1:length(publishers)
                 topic = publishers(lv1).topic;
@@ -340,6 +349,8 @@ classdef DiscreteSimulation < handle
                 % topic.
                 isSubscribed = ismember(topicList,topic);
                 subs = self.subscribers(isSubscribed);
+                
+                % Send the data to each subscriber
                 for lv2 = 1:length(subs)
                     if subs(lv2).timestamps
                         self.nodes.(subs(lv2).node).(subs(lv2).destination) = struct();

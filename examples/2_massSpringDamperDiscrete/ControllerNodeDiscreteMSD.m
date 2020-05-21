@@ -36,24 +36,19 @@ classdef ControllerNodeDiscreteMSD < handle
         
         function subscribers = createSubscribers(~)
             % Subscribe to the 'dyn_position' topic
-            sub1.topic = 'dyn_position';
-            sub1.destination = 'r';
+            subscribers(1).topic = 'dyn_position';
+            subscribers(1).destination = 'r';
             %sub1.callback = @self.someCallback % Could even have callbacks
             
             % Subscribe to the 'dyn_velocity' topic WITH TIMESTAMPS.
-            sub2.topic = 'dyn_velocity';
-            sub2.destination = 'v';
-            sub2.timestamps = true;
-            
-            % We could actually use a struct array instead of cells. I.e.
-            % do subscribers(1).topic = 'dyn_position';
-            subscribers{1} = sub1;
-            subscribers{2} = sub2;            
+            subscribers(2).topic = 'dyn_velocity';
+            subscribers(2).destination = 'v';
+            subscribers(2).timestamps = true;
         end
         
         function [data, publishers] = update(self,t)
             % This method is an example of an executable. Here we use this 
-            % uto pdate specific values (such as the control effort, in this
+            % to update specific values (such as the control effort, in this
             % case), which are most likely subscribed to by other nodes.
             %
             % Inputs

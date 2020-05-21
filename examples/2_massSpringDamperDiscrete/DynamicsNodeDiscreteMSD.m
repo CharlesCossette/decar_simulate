@@ -92,10 +92,8 @@ classdef DynamicsNodeDiscreteMSD < handle
         function subscribers = createSubscribers()
             % Provides a change of subscribers, which each have a topic and
             % where to copy the value - i.e. the destination.
-            sub1.topic = 'cont_controlEffort';
-            sub1.destination = 'controlEffort';
-            
-            subscribers{1} = sub1;
+            subscribers(1).topic = 'cont_controlEffort';
+            subscribers(1).destination = 'controlEffort';
         end
     end
 end
