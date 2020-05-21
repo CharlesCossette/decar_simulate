@@ -301,8 +301,17 @@ classdef DiscreteSimulation < handle
                             self.subscribers(counter).timestamps = false;
                         end
                         
-                        % Optional parameter - callbacks.
-                        % TODO: can add callback option here.
+                        % Optional parameter - callback.
+                        if isfield(sub,'callback') 
+                            if ~isempty(sub.callback)
+                                self.subscribers(counter).callback = sub.callback;
+                            else
+                                self.subscribers(counter).callback = false;
+                            end
+                        else
+                            self.subscribers(counter).callback = false;
+                        end
+         
                         counter = counter + 1;
                     end
                     
@@ -363,6 +372,12 @@ classdef DiscreteSimulation < handle
                     else
                         self.nodes.(subs(lv2).node).(subs(lv2).destination) = ...
                             publishers(lv1).value;
+                    end
+                    
+                    % Run callback if it exists
+                    if isa(subs(lv2).callback,'function_handle')
+                        cb = subs(lv2).callback;
+                        cb(t,publishers(lv1).value);
                     end
                 end
             end
