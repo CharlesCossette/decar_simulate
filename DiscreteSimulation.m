@@ -177,6 +177,7 @@ classdef DiscreteSimulation < handle
             
             % As it stands we would need to run each exec once and go
             % collect all the publishers.
+            
             if isempty(self.nodeTransferors)
                 self.createTransferors();
             end
@@ -249,7 +250,9 @@ classdef DiscreteSimulation < handle
                 
                 % subsasgn is a special function to dynamically index into
                 % a variable with unknown variable name.
-                self.execData.(execName).(dataNames_k{lv1}) = subsasgn(self.execData.(execName).(dataNames_k{lv1}),S,data_k.(dataNames_k{lv1}));
+                if ~isempty(data_k.(dataNames_k{lv1}))
+                    self.execData.(execName).(dataNames_k{lv1}) = subsasgn(self.execData.(execName).(dataNames_k{lv1}),S,data_k.(dataNames_k{lv1}));
+                end
             end
             
         end
