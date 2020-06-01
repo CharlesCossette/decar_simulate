@@ -29,20 +29,22 @@ sim.timeSpan = [0 10];
 cont = ControllerNodeDiscreteMSD();
 cont.k_p = params.k_p;
 cont.k_d = params.k_d;
-sim.addNode(cont,'controller',freq)
+cont.frequency = freq;
+sim.addNode(cont,'controller')
 dyn = DynamicsNodeDiscreteMSD();
 dyn.mass = params.m;
 dyn.dampingConstant = params.c;
 dyn.springConstant = params.k;
 dyn.position = x0(1);
 dyn.velocity = x0(2);
-sim.addNode(dyn,'dynamics',freq)
+dyn.frequency = freq;
+sim.addNode(dyn,'dynamics')
 data = sim.run();
 
 % Plot as visual check
 stairs(tStore,xStore(1,:).','LineWidth',2)
 hold on
-stairs(data.dynamics.t, data.dynamics.r,'LineWidth',2)
+stairs(data.dynamics_update.t, data.dynamics_update.r,'LineWidth',2)
 hold off
 grid on
 xlabel('Time (s)')
@@ -52,9 +54,9 @@ title('Comparison with a direct for loop')
 
 % Assert outputs are exactly the same.
 % Small floating point errors cause a tiny discrepancy
-assert(all(tStore == data.dynamics.t))
-assert(all(xStore(1,:).' - data.dynamics.r < 1e-13))
-assert(all(xStore(2,:).' - data.dynamics.v < 1e-13))
+assert(all(abs(tStore - data.dynamics_update.t)<1e-12))
+assert(all(abs(xStore(1,:).' - data.dynamics_update.r) < 1e-13))
+assert(all(abs(xStore(2,:).' - data.dynamics_update.v) < 1e-13))
 
 function x_k1 = MSDEuler(dt,x_k,params)
 % Simple mass spring damper with PD controller

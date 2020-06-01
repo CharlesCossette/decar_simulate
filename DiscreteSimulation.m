@@ -144,7 +144,7 @@ classdef DiscreteSimulation < handle
                         end
                         
                         % Update next time to run update for this node.
-                        nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
+                        nodeNextUpdateTimes(lv1) = round(nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1),10);
                     end
                 end
                 
