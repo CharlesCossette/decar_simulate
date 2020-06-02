@@ -287,8 +287,18 @@ classdef DiscreteSimulation < handle
                     for lv2 = 1:length(nodeSubs)
                         sub = nodeSubs(lv2);
                         self.subscribers(counter).topic = sub.topic;
-                        self.subscribers(counter).destination = sub.destination;
                         self.subscribers(counter).node = nodeName;
+                        
+                        % Optional parameter - destination variable.
+                        if isfield(sub,'destination') 
+                            if ~isempty(sub.destination)
+                                self.subscribers(counter).destination = sub.destination;
+                            else
+                                self.subscribers(counter).destination = false;
+                            end
+                        else
+                            self.subscribers(counter).destination = false;
+                        end
                         
                         % Optional parameter - timestamps.
                         if isfield(sub,'timestamps') 
@@ -364,14 +374,16 @@ classdef DiscreteSimulation < handle
                 
                 % Send the data to each subscriber
                 for lv2 = 1:length(subs)
-                    if subs(lv2).timestamps
-                        self.nodes.(subs(lv2).node).(subs(lv2).destination) = struct();
-                        self.nodes.(subs(lv2).node).(subs(lv2).destination).value = ...
-                            publishers(lv1).value;
-                        self.nodes.(subs(lv2).node).(subs(lv2).destination).t = t;
-                    else
-                        self.nodes.(subs(lv2).node).(subs(lv2).destination) = ...
-                            publishers(lv1).value;
+                    if isa(subs(lv2).destination,'char')
+                        if subs(lv2).timestamps
+                            self.nodes.(subs(lv2).node).(subs(lv2).destination) = struct();
+                            self.nodes.(subs(lv2).node).(subs(lv2).destination).value = ...
+                                publishers(lv1).value;
+                            self.nodes.(subs(lv2).node).(subs(lv2).destination).t = t;
+                        else
+                            self.nodes.(subs(lv2).node).(subs(lv2).destination) = ...
+                                publishers(lv1).value;
+                        end
                     end
                     
                     % Run callback if it exists
