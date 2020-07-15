@@ -109,7 +109,7 @@ classdef DiscreteSimulation < handle
                 %          as they will become even larger with longer
                 %          simulations.
                 for lv1 = 1:length(nodeNextUpdateTimes)
-                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-9
+                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-6
                         
                         % Extract executable function handle
                         exec = self.executables{lv1};
@@ -144,6 +144,7 @@ classdef DiscreteSimulation < handle
                         end
                         
                         % Update next time to run update for this node.
+                        % TODO - this still needs improvement.
                         nodeNextUpdateTimes(lv1) = round(nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1),10);
                     end
                 end
@@ -362,10 +363,18 @@ classdef DiscreteSimulation < handle
         
         function sendToSubscribers(self,publishers,t)
             
-            % Topics of all subscribesr.
+            % Topics of all subscribers.
             topicList = {self.subscribers(:).topic};
             for lv1 = 1:length(publishers)
                 topic = publishers(lv1).topic;
+                
+                % If publishers provided custom timestamp, send it.
+                % Otherwise just use the simulator clock.
+                if isfield(publishers(lv1),'timestamp')
+                    timestamp = publishers(lv1).timestamp;
+                else
+                    timestamp = t;
+                end
                 
                 % Get only the subscribers that are subscribed to this
                 % topic.
@@ -379,7 +388,7 @@ classdef DiscreteSimulation < handle
                             self.nodes.(subs(lv2).node).(subs(lv2).destination) = struct();
                             self.nodes.(subs(lv2).node).(subs(lv2).destination).value = ...
                                 publishers(lv1).value;
-                            self.nodes.(subs(lv2).node).(subs(lv2).destination).t = t;
+                            self.nodes.(subs(lv2).node).(subs(lv2).destination).t = timestamp;
                         else
                             self.nodes.(subs(lv2).node).(subs(lv2).destination) = ...
                                 publishers(lv1).value;
@@ -389,7 +398,7 @@ classdef DiscreteSimulation < handle
                     % Run callback if it exists
                     if isa(subs(lv2).callback,'function_handle')
                         cb = subs(lv2).callback;
-                        cb(t,publishers(lv1).value);
+                        cb(timestamp,publishers(lv1).value);
                     end
                 end
             end
