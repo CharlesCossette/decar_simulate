@@ -129,15 +129,15 @@ classdef DiscreteSimulation < handle
                             self.sendToSubscribers(publishers,t);
                             
                         elseif self.numOutput(lv1) == 1
-                            outputIter = exec(t);
+                            execOutput = exec(t);
                             % check if output is postprocessing data or a
                             % publisher
-                            if isfield(outputIter,'topic') && isfield(outputIter,'value')
+                            if isfield(execOutput,'topic') && isfield(execOutput,'value')
                                 % Transfer data
-                                self.sendToSubscribers(outputIter,t)
-                            else                  % then, outputIter = data_exec_k.
+                                self.sendToSubscribers(execOutput,t)
+                            elseif ~isempty(fieldnames(execOutput))
                                 % Append data
-                                self.appendSimData(t,outputIter,lv1);
+                                self.appendSimData(t,execOutput,lv1);
                             end
                         elseif self.numOutput(lv1) == 0
                             exec(t);
@@ -174,38 +174,38 @@ classdef DiscreteSimulation < handle
         end
         
         function showGraph(self)
-            % TODO: this doesnt work right now
-            
-            % As it stands we would need to run each exec once and go
-            % collect all the publishers.
-            
-            if isempty(self.nodeTransferors)
-                self.createTransferors();
-            end
-            edgeTable = table([  ],[],'VariableNames',{'EndNodes' 'Label'});
-            nodeNames = fieldnames(self.nodes);
-            
-            % Transferors
-            for lv1 = 1:numel(nodeNames)
-                if isfield(self.nodeTransferors, nodeNames{lv1})
-                    transferors = self.nodeTransferors.(nodeNames{lv1});
-                    for lv2 = 1:length(transferors)
-                        T = transferors{lv2};
-                        edgeTable = [edgeTable; {{T.eventNode,T.listeningNode},T.eventArg}];
-                    end
-                end
-            end
-            
-            G = digraph(edgeTable);
-            if numedges(G) > 0
-                p = plot(G,'EdgeLabel',G.Edges.Label);
-                p.Marker = 's';
-                p.MarkerSize = 7;
-                p.NodeColor = 'r';
-                p.ArrowSize = 15;
-            else
-                disp('No listeners in this simulation!')
-            end
+%             % TODO: this doesnt work right now
+%             
+%             % As it stands we would need to run each exec once and go
+%             % collect all the publishers.
+%             
+%             if isempty(self.nodeTransferors)
+%                 self.createTransferors();
+%             end
+%             edgeTable = table([  ],[],'VariableNames',{'EndNodes' 'Label'});
+%             nodeNames = fieldnames(self.nodes);
+%             
+%             % Transferors
+%             for lv1 = 1:numel(nodeNames)
+%                 if isfield(self.nodeTransferors, nodeNames{lv1})
+%                     transferors = self.nodeTransferors.(nodeNames{lv1});
+%                     for lv2 = 1:length(transferors)
+%                         T = transferors{lv2};
+%                         edgeTable = [edgeTable; {{T.eventNode,T.listeningNode},T.eventArg}];
+%                     end
+%                 end
+%             end
+%             
+%             G = digraph(edgeTable);
+%             if numedges(G) > 0
+%                 p = plot(G,'EdgeLabel',G.Edges.Label);
+%                 p.Marker = 's';
+%                 p.MarkerSize = 7;
+%                 p.NodeColor = 'r';
+%                 p.ArrowSize = 15;
+%             else
+%                 disp('No listeners in this simulation!')
+%             end
         end
         
     end
