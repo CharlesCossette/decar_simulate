@@ -135,9 +135,11 @@ classdef DiscreteSimulation < handle
                             if isfield(execOutput,'topic') && isfield(execOutput,'value')
                                 % Transfer data
                                 self.sendToSubscribers(execOutput,t)
-                            elseif ~isempty(fieldnames(execOutput))
-                                % Append data
-                                self.appendSimData(t,execOutput,lv1);
+                            elseif ~isempty(execOutput)
+                                if ~isempty(fieldnames(execOutput))
+                                    % Append data
+                                    self.appendSimData(t,execOutput,lv1);
+                                end
                             end
                         elseif self.numOutput(lv1) == 0
                             exec(t);
