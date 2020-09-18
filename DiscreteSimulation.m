@@ -352,7 +352,10 @@ classdef DiscreteSimulation < handle
                         exec = handles{lv2};
                         freq = freqs(lv2);
                         execName = func2str(exec);
+                        %execName = execName(strfind(execName,'.') + 1:end);
                         execName = erase(execName,'@(varargin)self.');
+                        execName = erase(execName,'@(varargin)obj.');
+                        execName = erase(execName,'@(varargin)this.');
                         execName = erase(execName,'(varargin{:})');
                         self.executables = [self.executables; {exec}];
                         self.frequencies = [self.frequencies; freq];
@@ -366,41 +369,43 @@ classdef DiscreteSimulation < handle
         function sendToSubscribers(self,publishers,t)
             
             % Topics of all subscribers.
-            topicList = {self.subscribers(:).topic};
-            for lv1 = 1:length(publishers)
-                topic = publishers(lv1).topic;
-                
-                % If publishers provided custom timestamp, send it.
-                % Otherwise just use the simulator clock.
-                if isfield(publishers(lv1),'timestamp')
-                    timestamp = publishers(lv1).timestamp;
-                else
-                    timestamp = t;
-                end
-                
-                % Get only the subscribers that are subscribed to this
-                % topic.
-                isSubscribed = ismember(topicList,topic);
-                subs = self.subscribers(isSubscribed);
-                
-                % Send the data to each subscriber
-                for lv2 = 1:length(subs)
-                    if isa(subs(lv2).destination,'char')
-                        if subs(lv2).timestamps
-                            self.nodes.(subs(lv2).node).(subs(lv2).destination) = struct();
-                            self.nodes.(subs(lv2).node).(subs(lv2).destination).value = ...
-                                publishers(lv1).value;
-                            self.nodes.(subs(lv2).node).(subs(lv2).destination).t = timestamp;
-                        else
-                            self.nodes.(subs(lv2).node).(subs(lv2).destination) = ...
-                                publishers(lv1).value;
-                        end
+            if ~isempty(fieldnames(self.subscribers))
+                topicList = {self.subscribers(:).topic};
+                for lv1 = 1:length(publishers)
+                    topic = publishers(lv1).topic;
+
+                    % If publishers provided custom timestamp, send it.
+                    % Otherwise just use the simulator clock.
+                    if isfield(publishers(lv1),'timestamp')
+                        timestamp = publishers(lv1).timestamp;
+                    else
+                        timestamp = t;
                     end
-                    
-                    % Run callback if it exists
-                    if isa(subs(lv2).callback,'function_handle')
-                        cb = subs(lv2).callback;
-                        cb(timestamp,publishers(lv1).value);
+
+                    % Get only the subscribers that are subscribed to this
+                    % topic.
+                    isSubscribed = ismember(topicList,topic);
+                    subs = self.subscribers(isSubscribed);
+
+                    % Send the data to each subscriber
+                    for lv2 = 1:length(subs)
+                        if isa(subs(lv2).destination,'char')
+                            if subs(lv2).timestamps
+                                self.nodes.(subs(lv2).node).(subs(lv2).destination) = struct();
+                                self.nodes.(subs(lv2).node).(subs(lv2).destination).value = ...
+                                    publishers(lv1).value;
+                                self.nodes.(subs(lv2).node).(subs(lv2).destination).t = timestamp;
+                            else
+                                self.nodes.(subs(lv2).node).(subs(lv2).destination) = ...
+                                    publishers(lv1).value;
+                            end
+                        end
+
+                        % Run callback if it exists
+                        if isa(subs(lv2).callback,'function_handle')
+                            cb = subs(lv2).callback;
+                            cb(timestamp,publishers(lv1).value);
+                        end
                     end
                 end
             end
