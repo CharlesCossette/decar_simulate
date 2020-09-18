@@ -2,11 +2,13 @@ classdef DiscreteSimulation < handle
     % DISCRETESIMULATION class for running multiple nodes in parallel, at
     % different frequencies. When you run a simulation with this class, it
     %
-    % 1) Checks to see what node needs to be updated next, and then
-    %    updates that node by running node.update(t) function.
-    % 2) Stores any data returned by the node.update(t) function.
+    % 1) executes all the "executables" which are functions in the node
+    % classes that are required to be called at specific frequencies,
     %
-    % This continuously occurs, advancing the simulator time to the next
+    % 2) passes the output of those executables (publishers) to any nodes
+    % that are subscribed to those topics.
+    %
+    % This continously occurs, advancing the simulator time to the next
     % node update, until we reach the user provided end time.
     
     properties
