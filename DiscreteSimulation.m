@@ -85,12 +85,21 @@ classdef DiscreteSimulation < handle
             for lv1 = 1:length(self.executables)
                 exec = self.executables{lv1};
                 try
-                    [~,~] = exec(t);
+                    [~, publishers] = exec(t);
                     self.numOutput(lv1) = 2;
+                    
+                    % Transfer data
+                    self.sendToSubscribers(publishers,t);
                 catch
                     try
-                        [~] = exec(t);
+                        execOutput = exec(t);
                         self.numOutput(lv1) = 1;
+                        % check if output is postprocessing data or a
+                        % publisher
+                        if isfield(execOutput,'topic') && isfield(execOutput,'value')
+                            % Transfer data
+                            self.sendToSubscribers(execOutput,t)
+                        end
                     catch
                         exec(t);
                         self.numOutput(lv1) = 0;
