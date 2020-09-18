@@ -1,5 +1,5 @@
 classdef DiscreteSimulation < handle
-    %DISCRETESIMULATION class for running multiple nodes in parallel, at
+    % DISCRETESIMULATION class for running multiple nodes in parallel, at
     % different frequencies. When you run a simulation with this class, it
     %
     % 1) Checks to see what node needs to be updated next, and then
@@ -11,14 +11,18 @@ classdef DiscreteSimulation < handle
     
     properties
         nodes
-        nodeFrequencies
-        nodeNumStates
-        nodeData
-        nodeListeners
         timeSpan
+        executables
+        subscribers
+        frequencies
+        names
+        execData
     end
     properties (Access = private)
         waitbarHandle
+        numOutput
+        execNodes
+        timestamps
     end
     
     methods
@@ -27,21 +31,18 @@ classdef DiscreteSimulation < handle
             self.timeSpan = [0 10];
         end
         
-        function addNode(self, node, nodeName, nodeFreq)
+        function addNode(self, node, nodeName)
             % Add node to list of nodes.
-            % Inputs
+            % Inputs:
             % --------
-            % node - An instantiation of a a specific node object.
+            % node: Object
+            %       An instantiation of a a specific node object.
             %
-            % nodeName - specific name to call that node, can be different
-            % from the class name.
-            %
-            % nodeFreq - node frequency in Hz. Can be different from all
-            % the other nodes.
+            % nodeName: string
+            %       specific name to call that node, can be different
+            %       from the class name.
             
             self.nodes.(nodeName) = node;
-            self.nodeFrequencies.(nodeName) = nodeFreq;
-            self.nodeData.(nodeName) = struct();
         end
         
         function data = run(self)
@@ -53,64 +54,118 @@ classdef DiscreteSimulation < handle
             F = findall(0,'type','figure','tag','TMWWaitbar');
             delete(F)
             
+            % Clear old data if any
+            self.execData = struct();
+            
             % Create waitbar
             self.waitbarHandle = waitbar(0,'Simulation In Progress');
             
-            % Create listeners
-            self.createListeners()
+            % Create subscribers
+            self.createSubscribers()
+            
+            % Create executables (all asynchronous functions)
+            self.createExecutables()
             
             % Get node frequencies
-            % store in a matrix instead of struct.
-            nodeNames = fieldnames(self.nodes);
-            nodeFreq = zeros(length(nodeNames),1);
-            for lv1 = 1:length(nodeNames)
-                nodeFreq(lv1) = self.nodeFrequencies.(nodeNames{lv1});
-            end
+            nodeFreq = self.frequencies;
             
             % Start and end times
             tStart = self.timeSpan(1);
             tEnd = self.timeSpan(end);
             
-            % Column matrix stores the next time that node should be
+            % Column matrix stores the next time that executable should be
             % updated. Initialize all to tStart
             nodeNextUpdateTimes = tStart*ones(length(nodeFreq),1);
             t = tStart;
             
             
-            % Run all the update() methods once to initialize everything.
-            for lv1 = 1:length(nodeNames)
-                node = self.nodes.(nodeNames{lv1});
-                if ismethod(node,'update')
-                    [~] = node.update(t);
+            % Run all executables once to initialize everything.
+            % Check and record how many variables does the function output.
+            self.numOutput = zeros(length(self.executables),1);
+            for lv1 = 1:length(self.executables)
+                exec = self.executables{lv1};
+                try
+                    [~, publishers] = exec(t);
+                    self.numOutput(lv1) = 2;
+                    
+                    % Transfer data
+                    self.sendToSubscribers(publishers,t);
+                catch
+                    try
+                        execOutput = exec(t);
+                        self.numOutput(lv1) = 1;
+                        % check if output is postprocessing data or a
+                        % publisher
+                        if isfield(execOutput,'topic') && isfield(execOutput,'value')
+                            % Transfer data
+                            self.sendToSubscribers(execOutput,t)
+                        end
+                    catch
+                        exec(t);
+                        self.numOutput(lv1) = 0;
+                    end
                 end
             end
             
             % %%%%%%%%%%%%%%%%%%%%%%%% MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
+            tOld = 0;
             while t <= tEnd
                 
                 % Check if it is time to update each node.
-                % Note: a small tolerance of 1e-14 is used due to
-                % occaisional rounding errors.
+                % Note: a small tolerance of 1e-9 is used due to
+                % accumulating rounding errors.
+                % TODO: 1) Find a way to deal with the rounding errors,
+                %          as they will become even larger with longer
+                %          simulations.
                 for lv1 = 1:length(nodeNextUpdateTimes)
-                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-14
+                    if abs(t - nodeNextUpdateTimes(lv1)) < 1e-6
                         
-                        % Update node state
-                        node = self.nodes.(nodeNames{lv1});
-                        if ismethod(node,'update')
-                            data_node_k = node.update(t);
+                        % Extract executable function handle
+                        exec = self.executables{lv1};
+                        
+                        % Check number of outputs of the executable.
+                        % If 2 outputs, then post-processing data and
+                        % publishers are to be addressed.
+                        % If 1 output, then check which one is it.
+                        if self.numOutput(lv1) == 2
+                            % Run executable
+                            [data_exec_k, publishers] = exec(t);
                             
                             % Append data
-                            self.nodeData.(nodeNames{lv1}) = ...
-                                self.appendSimData(t,data_node_k, self.nodeData.(nodeNames{lv1}));
+                            self.appendSimData(t,data_exec_k, lv1);
+                            
+                            % Transfer data
+                            self.sendToSubscribers(publishers,t);
+                            
+                        elseif self.numOutput(lv1) == 1
+                            execOutput = exec(t);
+                            % check if output is postprocessing data or a
+                            % publisher
+                            if isfield(execOutput,'topic') && isfield(execOutput,'value')
+                                % Transfer data
+                                self.sendToSubscribers(execOutput,t)
+                            elseif ~isempty(execOutput)
+                                if ~isempty(fieldnames(execOutput))
+                                    % Append data
+                                    self.appendSimData(t,execOutput,lv1);
+                                end
+                            end
+                        elseif self.numOutput(lv1) == 0
+                            exec(t);
                         end
                         
                         % Update next time to run update for this node.
-                        nodeNextUpdateTimes(lv1) = nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1);
+                        % TODO - this still needs improvement.
+                        nodeNextUpdateTimes(lv1) = round(nodeNextUpdateTimes(lv1)...
+                                                         + 1/nodeFreq(lv1),10);
                     end
                 end
                 
-                % Update waitbar
-                waitbar(t/tEnd,self.waitbarHandle);
+                % Update waitbar at every 1% change
+                if tOld ~= round((t - tStart)/(tEnd - tStart)*100)
+                    waitbar((t - tStart)/(tEnd - tStart),self.waitbarHandle);
+                    tOld = round((t - tStart)/(tEnd - tStart)*100);
+                end
                 
                 % Soonest update time
                 tNext = min(nodeNextUpdateTimes);
@@ -121,97 +176,249 @@ classdef DiscreteSimulation < handle
             % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             
             % Final bit of post-processing
-            % Squeeze to eliminate redundant dimensions.
-            for lv1 = 1:length(nodeNames)
-                data_node = self.nodeData.(nodeNames{lv1});
-                dataNames = fieldnames(data_node);
-                for lv2 = 1:numel(dataNames)
-                    data_node.(dataNames{lv2}) = squeeze(data_node.(dataNames{lv2}));
-                end
-                self.nodeData.(nodeNames{lv1}) = data_node;
-            end
-            data = self.nodeData;
+            self.squeezeData()
+            
+            % Return the executables data
+            data = self.execData;
             
             % Close waitbar
             close(self.waitbarHandle)
         end
         
         function showGraph(self)
-            if isempty(self.nodeListeners)
-                self.createListeners();
-            end
-            edgeTable = table([  ],[],'VariableNames',{'EndNodes' 'Label'});
-            nodeNames = fieldnames(self.nodes);
-            % Go through all the nodes
-            for lv1 = 1:numel(nodeNames)
-                listeners = self.nodeListeners.(nodeNames{lv1});
-                % Go through all the listeners to that node
-                for lv2 = 1:numel(listeners)
-                    L = listeners(lv2);
-                    % Go through all the nodes again to find out which node
-                    % it is listening to
-                    for lv3 = 1:numel(nodeNames)
-                        obj = L.Object{:};
-                        if obj == self.nodes.(nodeNames{lv3})
-                            edgeTable = [edgeTable; {{nodeNames{lv3},nodeNames{lv1}},L.Source{:}.Name}];
-                        end
-                    end
-                    
-                end
-            end
-            
-            G = digraph(edgeTable);
-            if numedges(G) > 0
-                p = plot(G,'EdgeLabel',G.Edges.Label);
-                p.Marker = 's';
-                p.MarkerSize = 7;
-                p.NodeColor = 'r';
-                p.ArrowSize = 15;
-            else
-                disp('No listeners in this simulation!')
-            end
+%             % TODO: this doesnt work right now
+%             
+%             % As it stands we would need to run each exec once and go
+%             % collect all the publishers.
+%             
+%             if isempty(self.nodeTransferors)
+%                 self.createTransferors();
+%             end
+%             edgeTable = table([  ],[],'VariableNames',{'EndNodes' 'Label'});
+%             nodeNames = fieldnames(self.nodes);
+%             
+%             % Transferors
+%             for lv1 = 1:numel(nodeNames)
+%                 if isfield(self.nodeTransferors, nodeNames{lv1})
+%                     transferors = self.nodeTransferors.(nodeNames{lv1});
+%                     for lv2 = 1:length(transferors)
+%                         T = transferors{lv2};
+%                         edgeTable = [edgeTable; {{T.eventNode,T.listeningNode},T.eventArg}];
+%                     end
+%                 end
+%             end
+%             
+%             G = digraph(edgeTable);
+%             if numedges(G) > 0
+%                 p = plot(G,'EdgeLabel',G.Edges.Label);
+%                 p.Marker = 's';
+%                 p.MarkerSize = 7;
+%                 p.NodeColor = 'r';
+%                 p.ArrowSize = 15;
+%             else
+%                 disp('No listeners in this simulation!')
+%             end
         end
         
     end
     
     methods (Access = private)
-        function data = appendSimData(~,t,data_k,data)
-            % Get all the field names from the sol_data struct.
-            % TODO - inefficient, memory not preallocated.
-            % TODO - ACTUALLY DO THIS SOON. Would seriously improve speed.
+        function appendSimData(self,t,data_k,execNumber)
+            % Inserts the data of the specific time point into the
+            execName = self.names{execNumber};
             data_k.t = t;
             dataNames_k = fieldnames(data_k);
             
-            % Each field should contain only 1 value, so loop and keep
-            % combining into a final data struct.
-            for lv2 = 1:numel(dataNames_k)
-                if isfield(data, dataNames_k{lv2})
-                    % Check if there is a field already in self.data
+            % Initialize executable entry in data struct if it does not
+            % exist.
+            if ~isfield(self.execData, execName)
+                self.execData.(execName) = struct();
+            end
+            
+            % Total number of data points we will get.
+            N = (self.timeSpan(end) - self.timeSpan(1))*self.frequencies(execNumber) + 1;
+            for lv1 = 1:length(dataNames_k)
+                if ~isfield(self.execData.(execName),dataNames_k{lv1})
+                    % Initialize and preallocate data storage arrays if a
+                    % particular data does not yet exist in exec data
+                    % struct.
                     
-                    % If a field contains a matrix, append in the
-                    % 3rd dimension. Generalized to N dimensions.
-                    N = ndims(data_k.(dataNames_k{lv2}));
-                    data.(dataNames_k{lv2}) = cat(N + 1, data.(dataNames_k{lv2}),...
-                        data_k.(dataNames_k{lv2}));
-                else
-                    % Otherwise create the field.
-                    data.(dataNames_k{lv2}) = [data_k.(dataNames_k{lv2})];
+                    % Get size of single data value.
+                    sz = size(data_k.(dataNames_k{lv1}));
+                    
+                    % Create array, augmenting by a single dimension with N
+                    % time points.
+                    self.execData.(execName).(dataNames_k{lv1}) = zeros([sz, N]);
+                    
+                end
+                
+                % Data has already been preallocated
+                indx = round((t - self.timeSpan(1))*self.frequencies(execNumber)) + 1;
+                S.type = '()';
+                
+                n = ndims(data_k.(dataNames_k{lv1}));
+                c = cell(1,n);
+                c(:) = {':'};
+                S.subs = [c,indx];
+                
+                % subsasgn is a special function to dynamically index into
+                % a variable with unknown variable name.
+                if ~isempty(data_k.(dataNames_k{lv1}))
+                    self.execData.(execName).(dataNames_k{lv1}) ...
+                        = subsasgn(self.execData.(execName).(dataNames_k{lv1}),...
+                        S,data_k.(dataNames_k{lv1}));
                 end
             end
             
         end
-        function createListeners(self)
-            % Run the createListeners method of all classes.
-            % If an output argument is returned, store it to create the
-            % interconnection graph.
+        
+        function squeezeData(self)
+            % Squeeze to eliminate redundant dimensions.
+            for lv1 = 1:length(self.executables)
+                if isfield(self.execData,self.names{lv1})
+                    data_exec = self.execData.(self.names{lv1});
+                    dataNames = fieldnames(data_exec);
+                    for lv2 = 1:numel(dataNames)
+                        data_exec.(dataNames{lv2}) = squeeze(data_exec.(dataNames{lv2}));
+                    end
+                    self.execData.(self.names{lv1}) = data_exec;
+                end
+            end
+        end
+        
+        function createSubscribers(self)
+            % Run the createSubcribers method of all classes.
+            self.subscribers = struct();
             nodeNames = fieldnames(self.nodes);
-            self.nodeListeners = struct();
+            counter = 1;
+            
+            % Go through each node and run createSubscribers()
             for lv1 = 1:length(nodeNames)
-                try
-                    varargout = self.nodes.(nodeNames{lv1}).createListeners(self.nodes);
-                    self.nodeListeners.(nodeNames{lv1}) = varargout;
-                catch
-                    self.nodeListeners.(nodeNames{lv1}) = [];
+                nodeName = nodeNames{lv1};
+                if ismethod(self.nodes.(nodeName),'createSubscribers')
+                    nodeSubs = self.nodes.(nodeName).createSubscribers();
+                    
+                    % Loop through all subscribers returned.
+                    for lv2 = 1:length(nodeSubs)
+                        sub = nodeSubs(lv2);
+                        self.subscribers(counter).topic = sub.topic;
+                        self.subscribers(counter).node = nodeName;
+                        
+                        % Optional parameter - destination variable.
+                        if isfield(sub,'destination') 
+                            if ~isempty(sub.destination)
+                                self.subscribers(counter).destination = sub.destination;
+                            else
+                                self.subscribers(counter).destination = false;
+                            end
+                        else
+                            self.subscribers(counter).destination = false;
+                        end
+                        
+                        % Optional parameter - timestamps.
+                        if isfield(sub,'timestamps') 
+                            if ~isempty(sub.timestamps)
+                                self.subscribers(counter).timestamps = sub.timestamps;
+                            else
+                                self.subscribers(counter).timestamps = false;
+                            end
+                        else
+                            self.subscribers(counter).timestamps = false;
+                        end
+                        
+                        % Optional parameter - callback.
+                        if isfield(sub,'callback') 
+                            if ~isempty(sub.callback)
+                                self.subscribers(counter).callback = sub.callback;
+                            else
+                                self.subscribers(counter).callback = false;
+                            end
+                        else
+                            self.subscribers(counter).callback = false;
+                        end
+         
+                        counter = counter + 1;
+                    end
+                    
+                end
+            end
+        end
+        
+        function createExecutables(self)
+            % Collects all the function handles that the user has returned
+            % as desired asynchrousnous executables, along with the
+            % frequencies at which to execute them.
+            nodeNames = fieldnames(self.nodes);
+            self.executables = {};
+            self.frequencies = [];
+            self.execNodes   = {};
+            self.names = {};
+            for lv1 = 1:length(nodeNames)
+                nodeName = nodeNames{lv1};
+                
+                % Add any other user-specifed executables.
+                % TODO - add user error checking
+                if ismethod(self.nodes.(nodeName),'createExecutables')
+                    [handles, freqs] = self.nodes.(nodeName).createExecutables();
+                    for lv2 = 1:length(handles)
+                        exec = handles{lv2};
+                        freq = freqs(lv2);
+                        execName = func2str(exec);
+                        %execName = execName(strfind(execName,'.') + 1:end);
+                        execName = erase(execName,'@(varargin)self.');
+                        execName = erase(execName,'@(varargin)obj.');
+                        execName = erase(execName,'@(varargin)this.');
+                        execName = erase(execName,'(varargin{:})');
+                        self.executables = [self.executables; {exec}];
+                        self.frequencies = [self.frequencies; freq];
+                        self.execNodes   = [self.execNodes; {nodeName}];
+                        self.names = [self.names; [nodeName,'_',execName]];
+                    end
+                end
+            end
+        end
+        
+        function sendToSubscribers(self,publishers,t)
+            
+            % Topics of all subscribers.
+            if ~isempty(fieldnames(self.subscribers))
+                topicList = {self.subscribers(:).topic};
+                for lv1 = 1:length(publishers)
+                    topic = publishers(lv1).topic;
+
+                    % If publishers provided custom timestamp, send it.
+                    % Otherwise just use the simulator clock.
+                    if isfield(publishers(lv1),'timestamp')
+                        timestamp = publishers(lv1).timestamp;
+                    else
+                        timestamp = t;
+                    end
+
+                    % Get only the subscribers that are subscribed to this
+                    % topic.
+                    isSubscribed = ismember(topicList,topic);
+                    subs = self.subscribers(isSubscribed);
+
+                    % Send the data to each subscriber
+                    for lv2 = 1:length(subs)
+                        if isa(subs(lv2).destination,'char')
+                            if subs(lv2).timestamps
+                                self.nodes.(subs(lv2).node).(subs(lv2).destination) = struct();
+                                self.nodes.(subs(lv2).node).(subs(lv2).destination).value = ...
+                                    publishers(lv1).value;
+                                self.nodes.(subs(lv2).node).(subs(lv2).destination).t = timestamp;
+                            else
+                                self.nodes.(subs(lv2).node).(subs(lv2).destination) = ...
+                                    publishers(lv1).value;
+                            end
+                        end
+
+                        % Run callback if it exists
+                        if isa(subs(lv2).callback,'function_handle')
+                            cb = subs(lv2).callback;
+                            cb(timestamp,publishers(lv1).value);
+                        end
+                    end
                 end
             end
         end

@@ -5,15 +5,18 @@
 
 % Create discrete time simulation object
 sim = DiscreteSimulation();
+sim.timeSpan = [0, 100];
 
 % Add controller node, arbitrarily named 'controller'.
-sim.addNode(ControllerNodeDiscreteMSD(),'controller',100)
+sim.addNode(ControllerNodeDiscreteMSD(),'controller')
 
 % Add dynamics node, arbitrarily named 'dynamics'.
-sim.addNode(DynamicsNodeDiscreteMSD(),'dynamics',200)
+sim.addNode(DynamicsNodeDiscreteMSD(),'dynamics')
 
 % Run sim, output data stored in a struct
+tic
 data = sim.run()
+toc
 
 % Graph shows how all the nodes are connected
-sim.showGraph()
+%sim.showGraph()

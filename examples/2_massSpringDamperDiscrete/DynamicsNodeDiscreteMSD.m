@@ -1,7 +1,8 @@
 classdef DynamicsNodeDiscreteMSD < handle
     % DYNAMICSNODEDISCRETEMSD - Mass-spring-damper dynamics, which listens
     % to the the control effort from the controller node. 
-    properties (SetObservable)
+    properties 
+        frequency
         position
         velocity
         accel
@@ -11,6 +12,10 @@ classdef DynamicsNodeDiscreteMSD < handle
         springConstant
         dampingConstant
         tOld
+        
+        timestamps % if this property exists in a node, then the timestep 
+                   % at which every transferor listeningArg (controlEffort 
+                   % in this case) is updated is recorded.
     end
         
     
@@ -24,18 +29,15 @@ classdef DynamicsNodeDiscreteMSD < handle
             self.velocity = 0;
             self.accel = 0;
             self.controlEffort = 0;
+            self.frequency = 200;
         end
         
-        function listeners = createListeners(self,nodes)
-            % Pass back listeners to construct graph.
-            listeners = addlistener(nodes.controller, 'u', 'PostSet', @self.cbControlEffort);
+        function [handles, freq] = createExecutables(self)
+            handles(1) = {@self.update};
+            freq(1) = self.frequency;
         end
-            
-        function cbControlEffort(self, src, evnt)
-            % Store control effort.
-            self.controlEffort = evnt.AffectedObject.u;
-        end      
-        function data = update(self, t)
+        
+        function [data, publishers] = update(self, t)
             % The update() function is called automatically by the
             % simulator at the user-specified frequency. Do whatever you
             % want with this. The simulator time t is passed for reference.
@@ -55,9 +57,16 @@ classdef DynamicsNodeDiscreteMSD < handle
             self.velocity = self.velocity + dt*a;
             self.tOld = t; % Dont forget this!!
             
+            % Export data
             data.r = self.position;
             data.v = self.velocity;
             data.a = a;
+            
+            % Publish data
+            publishers(1).topic = 'dyn_position';
+            publishers(1).value = self.position;
+            publishers(2).topic = 'dyn_velocity';
+            publishers(2).value = self.velocity;
             
         end
         
@@ -77,5 +86,14 @@ classdef DynamicsNodeDiscreteMSD < handle
         end
         
 
+    end
+    
+    methods (Static)
+        function subscribers = createSubscribers()
+            % Provides a change of subscribers, which each have a topic and
+            % where to copy the value - i.e. the destination.
+            subscribers(1).topic = 'cont_controlEffort';
+            subscribers(1).destination = 'controlEffort';
+        end
     end
 end
