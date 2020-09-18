@@ -156,7 +156,8 @@ classdef DiscreteSimulation < handle
                         
                         % Update next time to run update for this node.
                         % TODO - this still needs improvement.
-                        nodeNextUpdateTimes(lv1) = round(nodeNextUpdateTimes(lv1) + 1/nodeFreq(lv1),10);
+                        nodeNextUpdateTimes(lv1) = round(nodeNextUpdateTimes(lv1)...
+                                                         + 1/nodeFreq(lv1),10);
                     end
                 end
                 
@@ -263,7 +264,9 @@ classdef DiscreteSimulation < handle
                 % subsasgn is a special function to dynamically index into
                 % a variable with unknown variable name.
                 if ~isempty(data_k.(dataNames_k{lv1}))
-                    self.execData.(execName).(dataNames_k{lv1}) = subsasgn(self.execData.(execName).(dataNames_k{lv1}),S,data_k.(dataNames_k{lv1}));
+                    self.execData.(execName).(dataNames_k{lv1}) ...
+                        = subsasgn(self.execData.(execName).(dataNames_k{lv1}),...
+                        S,data_k.(dataNames_k{lv1}));
                 end
             end
             
