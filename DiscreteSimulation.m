@@ -270,7 +270,10 @@ classdef DiscreteSimulation < handle
                 data_fields = fieldnames(data_struct);
                 for lv2 = 1:numel(data_fields)
                     sz = size(data_struct(1).(data_fields{lv2}));
-                    if numel(sz) == 2 && sz(2) == 1
+                    if numel(sz) == 2 && sz(1) == 1 && sz(2) == 1
+                        % Scalar
+                        data.(data_fields{lv2}) = [data_struct(:).(data_fields{lv2})].';  
+                    elseif numel(sz) == 2 && sz(2) == 1
                         % Vectors
                         data.(data_fields{lv2}) = [data_struct(:).(data_fields{lv2})];
                     elseif numel(sz) == 2 && sz(2) > 1

@@ -54,9 +54,9 @@ title('Comparison with a direct for loop')
 
 % Assert outputs are exactly the same.
 % Small floating point errors cause a tiny discrepancy
-assert(all(abs(tStore - data.dynamics_update.t(:))<1e-12))
-assert(all(abs(xStore(1,:) - data.dynamics_update.r) < 1e-13))
-assert(all(abs(xStore(2,:) - data.dynamics_update.v) < 1e-13))
+assert(all(abs(tStore - data.dynamics_update.t)<1e-12))
+assert(all(abs(xStore(1,:).' - data.dynamics_update.r) < 1e-13))
+assert(all(abs(xStore(2,:).' - data.dynamics_update.v) < 1e-13))
 
 function x_k1 = MSDEuler(dt,x_k,params)
 % Simple mass spring damper with PD controller
