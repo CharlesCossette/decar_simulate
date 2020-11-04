@@ -240,8 +240,6 @@ classdef DiscreteSimulation < handle
             execName = self.names{execNumber};
             data_k.t = t;
             
-            % TODO: check for empty struct.
-            
             % Initialize executable entry in data struct if it does not
             % exist.
             if ~isfield(self.execData, execName)
@@ -251,6 +249,7 @@ classdef DiscreteSimulation < handle
                 self.execData.(execName).counter...
                     = self.execData.(execName).counter + 1;
             else
+                % Otherwise, add the data struct in cell array enty.
                 self.execData.(execName).data{self.execData.(execName).counter}...
                     = data_k;
                 self.execData.(execName).counter...
