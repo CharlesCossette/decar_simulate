@@ -275,16 +275,11 @@ classdef DiscreteSimulation < handle
                     elseif numel(sz) == 2 && sz(2) == 1
                         % Vectors
                         data.(data_fields{lv2}) = [data_struct(:).(data_fields{lv2})];
-                    elseif numel(sz) == 2 && sz(2) > 1
+                    elseif (numel(sz) == 2 && sz(2) > 1) || (numel(sz) > 2)
                         % Matrices
-                        data.(data_fields{lv2}) = [data_struct(:).(data_fields{lv2})];
-                        data.(data_fields{lv2}) = reshape(data.(data_fields{lv2}), sz(1), sz(2), []);
-                    elseif numel(sz) > 2
-                        % Higher-dimensional matrices (need to loop)
                         N = length(data_struct);
-                        temp = zeros([sz,N]);
-                        %TODO, will require subsagn
-                        error('Currently dont support 3D matrices')                            
+                        temp = [data_struct(:).(data_fields{lv2})];
+                        data.(data_fields{lv2}) = reshape(temp,[sz,N]);
                     end
                 end
                    
