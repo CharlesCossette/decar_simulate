@@ -1,15 +1,15 @@
 classdef DiscreteSimulation < handle
-    % DISCRETESIMULATION class for running multiple nodes in parallel, at
-    % different frequencies. When you run a simulation with this class, it
-    %
-    % 1) executes all the "executables" which are functions in the node
-    % classes that are required to be called at specific frequencies,
-    %
-    % 2) passes the output of those executables (publishers) to any nodes
-    % that are subscribed to those topics.
-    %
-    % This continously occurs, advancing the simulator time to the next
-    % node update, until we reach the user provided end time.
+% DISCRETESIMULATION class for running multiple nodes in parallel, at
+% different frequencies. When you run a simulation with this class, it
+%
+% 1) executes all the "executables" which are functions in the node
+% classes that are required to be called at specific frequencies,
+%
+% 2) passes the output of those executables (publishers) to any nodes
+% that are subscribed to those topics.
+%
+% This continously occurs, advancing the simulator time to the next
+% node update, until we reach the user provided end time.
     
     properties
         nodes
@@ -92,19 +92,27 @@ classdef DiscreteSimulation < handle
                     
                     % Transfer data
                     self.sendToSubscribers(publishers,t);
-                catch
-                    try
-                        execOutput = exec(t);
-                        self.numOutput(lv1) = 1;
-                        % check if output is postprocessing data or a
-                        % publisher
-                        if isfield(execOutput,'topic') && isfield(execOutput,'value')
-                            % Transfer data
-                            self.sendToSubscribers(execOutput,t)
+                catch ME
+                    if strcmp(ME.identifier, 'MATLAB:TooManyOutputs')
+                        try
+                            execOutput = exec(t);
+                            self.numOutput(lv1) = 1;
+                            % check if output is postprocessing data or a
+                            % publisher
+                            if isfield(execOutput,'topic') && isfield(execOutput,'value')
+                                % Transfer data
+                                self.sendToSubscribers(execOutput,t)
+                            end
+                        catch ME
+                            if strcmp(ME.identifier, 'MATLAB:TooManyOutputs')
+                                exec(t);
+                                self.numOutput(lv1) = 0;
+                            else
+                                rethrow(ME)
+                            end
                         end
-                    catch
-                        exec(t);
-                        self.numOutput(lv1) = 0;
+                    else
+                        rethrow(ME)
                     end
                 end
             end
@@ -158,6 +166,8 @@ classdef DiscreteSimulation < handle
                         
                         % Update next time to run update for this node.
                         % TODO - this still needs improvement.
+                        % We need to somehow remove the addition operation
+                        % here.
                         nodeNextUpdateTimes(lv1) = round(nodeNextUpdateTimes(lv1)...
                                                          + 1/nodeFreq(lv1),10);
                     end
@@ -178,7 +188,7 @@ classdef DiscreteSimulation < handle
             % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             
             % Final bit of post-processing
-            self.squeezeData()
+            self.rearrangeData()
             
             % Return the executables data
             data = self.execData;
@@ -229,62 +239,51 @@ classdef DiscreteSimulation < handle
             % Inserts the data of the specific time point into the
             execName = self.names{execNumber};
             data_k.t = t;
-            dataNames_k = fieldnames(data_k);
             
             % Initialize executable entry in data struct if it does not
             % exist.
             if ~isfield(self.execData, execName)
-                self.execData.(execName) = struct();
-            end
-            
-            % Total number of data points we will get.
-            N = (self.timeSpan(end) - self.timeSpan(1))*self.frequencies(execNumber) + 1;
-            for lv1 = 1:length(dataNames_k)
-                if ~isfield(self.execData.(execName),dataNames_k{lv1})
-                    % Initialize and preallocate data storage arrays if a
-                    % particular data does not yet exist in exec data
-                    % struct.
-                    
-                    % Get size of single data value.
-                    sz = size(data_k.(dataNames_k{lv1}));
-                    
-                    % Create array, augmenting by a single dimension with N
-                    % time points.
-                    self.execData.(execName).(dataNames_k{lv1}) = zeros([sz, N]);
-                    
-                end
-                
-                % Data has already been preallocated
-                indx = round((t - self.timeSpan(1))*self.frequencies(execNumber)) + 1;
-                S.type = '()';
-                
-                n = ndims(data_k.(dataNames_k{lv1}));
-                c = cell(1,n);
-                c(:) = {':'};
-                S.subs = [c,indx];
-                
-                % subsasgn is a special function to dynamically index into
-                % a variable with unknown variable name.
-                if ~isempty(data_k.(dataNames_k{lv1}))
-                    self.execData.(execName).(dataNames_k{lv1}) ...
-                        = subsasgn(self.execData.(execName).(dataNames_k{lv1}),...
-                        S,data_k.(dataNames_k{lv1}));
-                end
+                self.execData.(execName).counter = 1;
+                self.execData.(execName).data{self.execData.(execName).counter}...
+                    = data_k;
+                self.execData.(execName).counter...
+                    = self.execData.(execName).counter + 1;
+            else
+                % Otherwise, add the data struct in cell array enty.
+                self.execData.(execName).data{self.execData.(execName).counter}...
+                    = data_k;
+                self.execData.(execName).counter...
+                    = self.execData.(execName).counter + 1;
             end
             
         end
         
-        function squeezeData(self)
+        function rearrangeData(self)
             % Squeeze to eliminate redundant dimensions.
-            for lv1 = 1:length(self.executables)
-                if isfield(self.execData,self.names{lv1})
-                    data_exec = self.execData.(self.names{lv1});
-                    dataNames = fieldnames(data_exec);
-                    for lv2 = 1:numel(dataNames)
-                        data_exec.(dataNames{lv2}) = squeeze(data_exec.(dataNames{lv2}));
+            fields = fieldnames(self.execData);
+            for lv1 = 1:numel(fields)
+                % Convert to struct array
+                data_struct = [self.execData.(fields{lv1}).data{:}];
+                
+                % Convert to matrices
+                data_fields = fieldnames(data_struct);
+                for lv2 = 1:numel(data_fields)
+                    sz = size(data_struct(1).(data_fields{lv2}));
+                    if numel(sz) == 2 && sz(1) == 1 && sz(2) == 1
+                        % Scalar
+                        data.(data_fields{lv2}) = [data_struct(:).(data_fields{lv2})].';  
+                    elseif numel(sz) == 2 && sz(2) == 1
+                        % Vectors
+                        data.(data_fields{lv2}) = [data_struct(:).(data_fields{lv2})];
+                    elseif (numel(sz) == 2 && sz(2) > 1) || (numel(sz) > 2)
+                        % Matrices
+                        N = length(data_struct);
+                        temp = [data_struct(:).(data_fields{lv2})];
+                        data.(data_fields{lv2}) = reshape(temp,[sz,N]);
                     end
-                    self.execData.(self.names{lv1}) = data_exec;
                 end
+                   
+                self.execData.(fields{lv1}) = data;
             end
         end
         
